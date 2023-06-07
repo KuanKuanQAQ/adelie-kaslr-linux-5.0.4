@@ -133,12 +133,12 @@
 #include <linux/sbitmap.h>
 #include <linux/delay.h>
 
-#include "blk.h"
-#include "blk-mq.h"
-#include "blk-mq-tag.h"
-#include "blk-mq-sched.h"
+#include "../blk.h"
+#include "../blk-mq.h"
+#include "../blk-mq-tag.h"
+#include "../blk-mq-sched.h"
 #include "bfq-iosched.h"
-#include "blk-wbt.h"
+#include "../blk-wbt.h"
 
 MODULE_INFO(randomizable, "Y");
 
@@ -5791,6 +5791,7 @@ char bfq_driver_name[] = "bfq";
 void bfq_test_func(char *name) {
 	printk("From bfq_test_func: ");
 	printk("Module Name: %s \n", name);
+	// bfq_test_func_real cant be found.
     // printk("Real Function Address: %px\n", &bfq_test_func_real);
     printk("Wrap Function Address: %px\n", &bfq_test_func);
 	return;
