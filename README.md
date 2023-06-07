@@ -3,4 +3,4 @@
 2. 追加函数指针测试。
 
 注意：
-1. fuse 模块补丁疑似 bug。kaslr_fuse.patch 会导致编译失败。
+1. fuse 模块补丁疑似 bug。kaslr_fuse.patch 会导致编译失败。所以本分支未应用 kaslr_fuse.patch.

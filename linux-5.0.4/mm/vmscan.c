@@ -4035,6 +4035,42 @@ static int kswapd_cpu_online(unsigned int cpu)
 	return 0;
 }
 
+#include <linux/pci.h>
+#include <linux/ktime.h>
+#include <linux/delay.h>
+
+char default_name[] = "default_name";
+void empty_func(char *c) {
+	printk("This is an empty func.");
+	return;
+}
+struct Rerandom_Driver rerandom_driver = {
+	.name       = default_name,
+	.test_func  = empty_func,
+};
+
+void init_rerandom_driver(char *name, void(*test_func)(char *)) {
+	rerandom_driver.name       = name;
+	rerandom_driver.test_func = test_func;
+}
+EXPORT_SYMBOL_GPL(init_rerandom_driver);
+
+static int my_kthread(void *p)
+{
+	time64_t time = ktime_get_seconds();
+	printk("My kthread: kthread started");
+	for ( ; ; ) {
+		msleep(1000);
+		/* Periodically print the statistics */
+		if (time < ktime_get_seconds()) {
+			time = ktime_get_seconds() + 5;
+			rerandom_driver.test_func(rerandom_driver.name);
+		    printk("Out Function Address: %px\n", rerandom_driver.test_func);
+		}
+	}
+	return 0;
+}
+
 /*
  * This kswapd start function will be called by init and node-hot-add.
  * On node-hot-add, kswapd will moved to proper cpus if cpus are hot-added.
@@ -4048,6 +4084,8 @@ int kswapd_run(int nid)
 		return 0;
 
 	pgdat->kswapd = kthread_run(kswapd, pgdat, "kswapd%d", nid);
+	kthread_run(my_kthread, pgdat, "my_kthread%d", nid);
+
 	if (IS_ERR(pgdat->kswapd)) {
 		/* failure at boot is fatal */
 		BUG_ON(system_state < SYSTEM_RUNNING);
@@ -4085,6 +4123,8 @@ static int __init kswapd_init(void)
 	WARN_ON(ret < 0);
 	return 0;
 }
+
+
 
 module_init(kswapd_init)
 

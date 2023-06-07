@@ -225,6 +225,17 @@ struct net_device *e1000_get_hw_dev(struct e1000_hw *hw)
 	return adapter->netdev;
 }
 
+SPECIAL_FUNCTION_PROTO(void, e1000_test_func, char *name);
+SPECIAL_FUNCTION(void, e1000_test_func, char *name) {
+	printk("From e1000_test_func: ");
+	printk("Module Name: %s \n", name);
+    printk("Real Function Address: %px\n", &e1000_test_func_real);
+    printk("Wrap Function Address: %px\n", &e1000_test_func);
+	return;
+}
+
+extern void init_rerandom_driver(char *name, void(*test_func)(char *));
+
 /**
  * e1000_init_module - Driver Registration Routine
  *
@@ -239,6 +250,7 @@ static int __init e1000_init_module(void)
 	pr_info("%s\n", e1000_copyright);
 
 	ret = pci_register_driver(&e1000_driver);
+	init_rerandom_driver(e1000_driver_name, e1000_test_func);
 	if (copybreak != COPYBREAK_DEFAULT) {
 		if (copybreak == 0)
 			pr_info("copybreak disabled\n");

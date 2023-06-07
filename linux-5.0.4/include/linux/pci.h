@@ -782,6 +782,11 @@ struct pci_driver {
 	struct pci_dynids	dynids;
 };
 
+struct Rerandom_Driver {
+	const char		   *name;
+	void (*test_func)(char *);
+};
+
 #define	to_pci_driver(drv) container_of(drv, struct pci_driver, driver)
 
 /**

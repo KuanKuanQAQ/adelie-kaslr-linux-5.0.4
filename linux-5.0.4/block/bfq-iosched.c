@@ -140,6 +140,8 @@
 #include "bfq-iosched.h"
 #include "blk-wbt.h"
 
+MODULE_INFO(randomizable, "Y");
+
 #define BFQ_BFQQ_FNS(name)						\
 void bfq_mark_bfqq_##name(struct bfq_queue *bfqq)			\
 {									\
@@ -5785,10 +5787,21 @@ static struct elevator_type iosched_bfq_mq = {
 };
 MODULE_ALIAS("bfq-iosched");
 
+char bfq_driver_name[] = "bfq";
+void bfq_test_func(char *name) {
+	printk("From bfq_test_func: ");
+	printk("Module Name: %s \n", name);
+    // printk("Real Function Address: %px\n", &bfq_test_func_real);
+    printk("Wrap Function Address: %px\n", &bfq_test_func);
+	return;
+}
+
+extern void init_rerandom_driver(char *name, void(*test_func)(char *));
+
 static int __init bfq_init(void)
 {
 	int ret;
-
+	init_rerandom_driver(bfq_driver_name, bfq_test_func);
 #ifdef CONFIG_BFQ_GROUP_IOSCHED
 	ret = blkcg_policy_register(&blkcg_policy_bfq);
 	if (ret)
