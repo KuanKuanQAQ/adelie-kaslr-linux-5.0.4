@@ -23,7 +23,18 @@
 #include <linux/mii.h>
 #include <linux/mdio.h>
 #include <linux/pm_qos.h>
+#include <linux/module.h>
 #include "hw.h"
+
+// TODO: Remove
+#ifndef SPECIAL_VAR
+/* These are for IDE */
+#define SPECIAL_VAR(x) x
+#define SPECIAL_CONST_VAR(x) x
+#define SPECIAL_FUNCTION_PROTO(ret, name, args...) ret name (args)
+#define SPECIAL_FUNCTION(ret, name, args...) ret name (args)
+#error "Could not find wrappers"
+#endif
 
 struct e1000_info;
 
@@ -466,8 +477,8 @@ extern const char e1000e_driver_version[];
 void e1000e_check_options(struct e1000_adapter *adapter);
 void e1000e_set_ethtool_ops(struct net_device *netdev);
 
-int e1000e_open(struct net_device *netdev);
-int e1000e_close(struct net_device *netdev);
+SPECIAL_FUNCTION_PROTO(int, e1000e_open, struct net_device *netdev);
+SPECIAL_FUNCTION_PROTO(int, e1000e_close, struct net_device *netdev);
 void e1000e_up(struct e1000_adapter *adapter);
 void e1000e_down(struct e1000_adapter *adapter, bool reset);
 void e1000e_reinit_locked(struct e1000_adapter *adapter);

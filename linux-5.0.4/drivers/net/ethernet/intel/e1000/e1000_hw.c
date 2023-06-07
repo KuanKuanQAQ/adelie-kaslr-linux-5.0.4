@@ -66,8 +66,8 @@ static s32 e1000_do_write_eeprom(struct e1000_hw *hw, u16 offset, u16 words,
 				 u16 *data);
 
 /* IGP cable length table */
-static const
-u16 e1000_igp_cable_length_table[IGP01E1000_AGC_LENGTH_TABLE_SIZE] = {
+SPECIAL_CONST_VAR(const
+u16 e1000_igp_cable_length_table[IGP01E1000_AGC_LENGTH_TABLE_SIZE]) = {
 	5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
 	5, 10, 10, 10, 10, 10, 10, 10, 20, 20, 20, 20, 20, 25, 25, 25,
 	25, 25, 25, 25, 30, 30, 30, 30, 40, 40, 40, 40, 40, 40, 40, 40,
@@ -5101,7 +5101,7 @@ static s32 e1000_check_downshift(struct e1000_hw *hw)
 	return E1000_SUCCESS;
 }
 
-static const u16 dsp_reg_array[IGP01E1000_PHY_CHANNEL_NUM] = {
+SPECIAL_CONST_VAR(const u16 dsp_reg_array[IGP01E1000_PHY_CHANNEL_NUM]) = {
 	IGP01E1000_PHY_AGC_PARAM_A,
 	IGP01E1000_PHY_AGC_PARAM_B,
 	IGP01E1000_PHY_AGC_PARAM_C,

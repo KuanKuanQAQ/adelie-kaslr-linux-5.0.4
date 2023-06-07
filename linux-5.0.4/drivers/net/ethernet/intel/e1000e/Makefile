@@ -5,6 +5,8 @@
 # Makefile for the Intel(R) PRO/1000 ethernet driver
 #
 
+EXTRA_CFLAGS = -fvisibility=default
+
 obj-$(CONFIG_E1000E) += e1000e.o
 
 e1000e-objs := 82571.o ich8lan.o 80003es2lan.o \

@@ -22,7 +22,7 @@
  * Adjust the frequency of the PHC cycle counter by the indicated delta from
  * the base frequency.
  **/
-static int e1000e_phc_adjfreq(struct ptp_clock_info *ptp, s32 delta)
+SPECIAL_FUNCTION(int, e1000e_phc_adjfreq, struct ptp_clock_info *ptp, s32 delta)
 {
 	struct e1000_adapter *adapter = container_of(ptp, struct e1000_adapter,
 						     ptp_clock_info);
@@ -75,7 +75,7 @@ static int e1000e_phc_adjfreq(struct ptp_clock_info *ptp, s32 delta)
  *
  * Adjust the timer by resetting the timecounter structure.
  **/
-static int e1000e_phc_adjtime(struct ptp_clock_info *ptp, s64 delta)
+SPECIAL_FUNCTION(int, e1000e_phc_adjtime, struct ptp_clock_info *ptp, s64 delta)
 {
 	struct e1000_adapter *adapter = container_of(ptp, struct e1000_adapter,
 						     ptp_clock_info);
@@ -170,7 +170,7 @@ static int e1000e_phc_getcrosststamp(struct ptp_clock_info *ptp,
  * Read the timecounter and return the correct value in ns after converting
  * it into a struct timespec.
  **/
-static int e1000e_phc_gettimex(struct ptp_clock_info *ptp,
+SPECIAL_FUNCTION(int, e1000e_phc_gettimex, struct ptp_clock_info *ptp,
 			       struct timespec64 *ts,
 			       struct ptp_system_timestamp *sts)
 {
@@ -200,7 +200,7 @@ static int e1000e_phc_gettimex(struct ptp_clock_info *ptp,
  * Reset the timecounter to use a new base value instead of the kernel
  * wall timer value.
  **/
-static int e1000e_phc_settime(struct ptp_clock_info *ptp,
+SPECIAL_FUNCTION(int, e1000e_phc_settime, struct ptp_clock_info *ptp,
 			      const struct timespec64 *ts)
 {
 	struct e1000_adapter *adapter = container_of(ptp, struct e1000_adapter,
@@ -227,14 +227,14 @@ static int e1000e_phc_settime(struct ptp_clock_info *ptp,
  * Enable (or disable) ancillary features of the PHC subsystem.
  * Currently, no ancillary features are supported.
  **/
-static int e1000e_phc_enable(struct ptp_clock_info __always_unused *ptp,
+SPECIAL_FUNCTION(int, e1000e_phc_enable, struct ptp_clock_info __always_unused *ptp,
 			     struct ptp_clock_request __always_unused *request,
 			     int __always_unused on)
 {
 	return -EOPNOTSUPP;
 }
 
-static void e1000e_systim_overflow_work(struct work_struct *work)
+SPECIAL_FUNCTION(void, e1000e_systim_overflow_work, struct work_struct *work)
 {
 	struct e1000_adapter *adapter = container_of(work, struct e1000_adapter,
 						     systim_overflow_work.work);
@@ -253,7 +253,7 @@ static void e1000e_systim_overflow_work(struct work_struct *work)
 			      E1000_SYSTIM_OVERFLOW_PERIOD);
 }
 
-static const struct ptp_clock_info e1000e_ptp_clock_info = {
+SPECIAL_CONST_VAR(const struct ptp_clock_info e1000e_ptp_clock_info) = {
 	.owner		= THIS_MODULE,
 	.n_alarm	= 0,
 	.n_ext_ts	= 0,

@@ -34,7 +34,7 @@ struct e1000_stats {
 		.sizeof_stat = sizeof(((struct rtnl_link_stats64 *)0)->m), \
 		.stat_offset = offsetof(struct rtnl_link_stats64, m) }
 
-static const struct e1000_stats e1000_gstrings_stats[] = {
+const struct e1000_stats e1000_gstrings_stats[] = {
 	E1000_STAT("rx_packets", stats.gprc),
 	E1000_STAT("tx_packets", stats.gptc),
 	E1000_STAT("rx_bytes", stats.gorc),
@@ -92,7 +92,7 @@ static const struct e1000_stats e1000_gstrings_stats[] = {
 
 #define E1000_GLOBAL_STATS_LEN	ARRAY_SIZE(e1000_gstrings_stats)
 #define E1000_STATS_LEN (E1000_GLOBAL_STATS_LEN)
-static const char e1000_gstrings_test[][ETH_GSTRING_LEN] = {
+const char e1000_gstrings_test[][ETH_GSTRING_LEN] = {
 	"Register test  (offline)", "Eeprom test    (offline)",
 	"Interrupt test (offline)", "Loopback test  (offline)",
 	"Link test   (on/offline)"
@@ -100,7 +100,7 @@ static const char e1000_gstrings_test[][ETH_GSTRING_LEN] = {
 
 #define E1000_TEST_LEN ARRAY_SIZE(e1000_gstrings_test)
 
-static int e1000_get_link_ksettings(struct net_device *netdev,
+SPECIAL_FUNCTION(int, e1000_get_link_ksettings, struct net_device *netdev,
 				    struct ethtool_link_ksettings *cmd)
 {
 	struct e1000_adapter *adapter = netdev_priv(netdev);
@@ -248,7 +248,7 @@ err_inval:
 	return -EINVAL;
 }
 
-static int e1000_set_link_ksettings(struct net_device *netdev,
+SPECIAL_FUNCTION(int, e1000_set_link_ksettings, struct net_device *netdev,
 				    const struct ethtool_link_ksettings *cmd)
 {
 	struct e1000_adapter *adapter = netdev_priv(netdev);
@@ -337,7 +337,7 @@ out:
 	return ret_val;
 }
 
-static void e1000_get_pauseparam(struct net_device *netdev,
+SPECIAL_FUNCTION(void, e1000_get_pauseparam, struct net_device *netdev,
 				 struct ethtool_pauseparam *pause)
 {
 	struct e1000_adapter *adapter = netdev_priv(netdev);
@@ -356,7 +356,7 @@ static void e1000_get_pauseparam(struct net_device *netdev,
 	}
 }
 
-static int e1000_set_pauseparam(struct net_device *netdev,
+SPECIAL_FUNCTION(int, e1000_set_pauseparam, struct net_device *netdev,
 				struct ethtool_pauseparam *pause)
 {
 	struct e1000_adapter *adapter = netdev_priv(netdev);
@@ -407,25 +407,25 @@ out:
 	return retval;
 }
 
-static u32 e1000_get_msglevel(struct net_device *netdev)
+SPECIAL_FUNCTION(u32, e1000_get_msglevel, struct net_device *netdev)
 {
 	struct e1000_adapter *adapter = netdev_priv(netdev);
 	return adapter->msg_enable;
 }
 
-static void e1000_set_msglevel(struct net_device *netdev, u32 data)
+SPECIAL_FUNCTION(void, e1000_set_msglevel, struct net_device *netdev, u32 data)
 {
 	struct e1000_adapter *adapter = netdev_priv(netdev);
 	adapter->msg_enable = data;
 }
 
-static int e1000_get_regs_len(struct net_device __always_unused *netdev)
+SPECIAL_FUNCTION(int, e1000_get_regs_len, struct net_device __always_unused *netdev)
 {
 #define E1000_REGS_LEN 32	/* overestimate */
 	return E1000_REGS_LEN * sizeof(u32);
 }
 
-static void e1000_get_regs(struct net_device *netdev,
+SPECIAL_FUNCTION(void, e1000_get_regs, struct net_device *netdev,
 			   struct ethtool_regs *regs, void *p)
 {
 	struct e1000_adapter *adapter = netdev_priv(netdev);
@@ -484,13 +484,13 @@ static void e1000_get_regs(struct net_device *netdev,
 	pm_runtime_put_sync(netdev->dev.parent);
 }
 
-static int e1000_get_eeprom_len(struct net_device *netdev)
+SPECIAL_FUNCTION(int, e1000_get_eeprom_len, struct net_device *netdev)
 {
 	struct e1000_adapter *adapter = netdev_priv(netdev);
 	return adapter->hw.nvm.word_size * 2;
 }
 
-static int e1000_get_eeprom(struct net_device *netdev,
+SPECIAL_FUNCTION(int, e1000_get_eeprom, struct net_device *netdev,
 			    struct ethtool_eeprom *eeprom, u8 *bytes)
 {
 	struct e1000_adapter *adapter = netdev_priv(netdev);
@@ -547,7 +547,7 @@ static int e1000_get_eeprom(struct net_device *netdev,
 	return ret_val;
 }
 
-static int e1000_set_eeprom(struct net_device *netdev,
+SPECIAL_FUNCTION(int, e1000_set_eeprom, struct net_device *netdev,
 			    struct ethtool_eeprom *eeprom, u8 *bytes)
 {
 	struct e1000_adapter *adapter = netdev_priv(netdev);
@@ -627,7 +627,7 @@ out:
 	return ret_val;
 }
 
-static void e1000_get_drvinfo(struct net_device *netdev,
+SPECIAL_FUNCTION(void, e1000_get_drvinfo, struct net_device *netdev,
 			      struct ethtool_drvinfo *drvinfo)
 {
 	struct e1000_adapter *adapter = netdev_priv(netdev);
@@ -649,7 +649,7 @@ static void e1000_get_drvinfo(struct net_device *netdev,
 		sizeof(drvinfo->bus_info));
 }
 
-static void e1000_get_ringparam(struct net_device *netdev,
+SPECIAL_FUNCTION(void, e1000_get_ringparam, struct net_device *netdev,
 				struct ethtool_ringparam *ring)
 {
 	struct e1000_adapter *adapter = netdev_priv(netdev);
@@ -660,7 +660,7 @@ static void e1000_get_ringparam(struct net_device *netdev,
 	ring->tx_pending = adapter->tx_ring_count;
 }
 
-static int e1000_set_ringparam(struct net_device *netdev,
+SPECIAL_FUNCTION(int, e1000_set_ringparam, struct net_device *netdev,
 			       struct ethtool_ringparam *ring)
 {
 	struct e1000_adapter *adapter = netdev_priv(netdev);
@@ -968,7 +968,7 @@ static int e1000_eeprom_test(struct e1000_adapter *adapter, u64 *data)
 	return *data;
 }
 
-static irqreturn_t e1000_test_intr(int __always_unused irq, void *data)
+SPECIAL_FUNCTION(irqreturn_t, e1000_test_intr, int __always_unused irq, void *data)
 {
 	struct net_device *netdev = (struct net_device *)data;
 	struct e1000_adapter *adapter = netdev_priv(netdev);
@@ -1767,7 +1767,7 @@ static int e1000_link_test(struct e1000_adapter *adapter, u64 *data)
 	return *data;
 }
 
-static int e1000e_get_sset_count(struct net_device __always_unused *netdev,
+SPECIAL_FUNCTION(int, e1000e_get_sset_count, struct net_device __always_unused *netdev,
 				 int sset)
 {
 	switch (sset) {
@@ -1780,7 +1780,7 @@ static int e1000e_get_sset_count(struct net_device __always_unused *netdev,
 	}
 }
 
-static void e1000_diag_test(struct net_device *netdev,
+SPECIAL_FUNCTION(void, e1000_diag_test, struct net_device *netdev,
 			    struct ethtool_test *eth_test, u64 *data)
 {
 	struct e1000_adapter *adapter = netdev_priv(netdev);
@@ -1880,7 +1880,7 @@ static void e1000_diag_test(struct net_device *netdev,
 	pm_runtime_put_sync(netdev->dev.parent);
 }
 
-static void e1000_get_wol(struct net_device *netdev,
+SPECIAL_FUNCTION(void, e1000_get_wol, struct net_device *netdev,
 			  struct ethtool_wolinfo *wol)
 {
 	struct e1000_adapter *adapter = netdev_priv(netdev);
@@ -1915,7 +1915,7 @@ static void e1000_get_wol(struct net_device *netdev,
 		wol->wolopts |= WAKE_PHY;
 }
 
-static int e1000_set_wol(struct net_device *netdev, struct ethtool_wolinfo *wol)
+SPECIAL_FUNCTION(int, e1000_set_wol, struct net_device *netdev, struct ethtool_wolinfo *wol)
 {
 	struct e1000_adapter *adapter = netdev_priv(netdev);
 
@@ -1944,7 +1944,7 @@ static int e1000_set_wol(struct net_device *netdev, struct ethtool_wolinfo *wol)
 	return 0;
 }
 
-static int e1000_set_phys_id(struct net_device *netdev,
+SPECIAL_FUNCTION(int, e1000_set_phys_id, struct net_device *netdev,
 			     enum ethtool_phys_id_state state)
 {
 	struct e1000_adapter *adapter = netdev_priv(netdev);
@@ -1980,7 +1980,7 @@ static int e1000_set_phys_id(struct net_device *netdev,
 	return 0;
 }
 
-static int e1000_get_coalesce(struct net_device *netdev,
+SPECIAL_FUNCTION(int, e1000_get_coalesce, struct net_device *netdev,
 			      struct ethtool_coalesce *ec)
 {
 	struct e1000_adapter *adapter = netdev_priv(netdev);
@@ -1993,7 +1993,7 @@ static int e1000_get_coalesce(struct net_device *netdev,
 	return 0;
 }
 
-static int e1000_set_coalesce(struct net_device *netdev,
+SPECIAL_FUNCTION(int, e1000_set_coalesce, struct net_device *netdev,
 			      struct ethtool_coalesce *ec)
 {
 	struct e1000_adapter *adapter = netdev_priv(netdev);
@@ -2027,7 +2027,7 @@ static int e1000_set_coalesce(struct net_device *netdev,
 	return 0;
 }
 
-static int e1000_nway_reset(struct net_device *netdev)
+SPECIAL_FUNCTION(int, e1000_nway_reset, struct net_device *netdev)
 {
 	struct e1000_adapter *adapter = netdev_priv(netdev);
 
@@ -2044,7 +2044,7 @@ static int e1000_nway_reset(struct net_device *netdev)
 	return 0;
 }
 
-static void e1000_get_ethtool_stats(struct net_device *netdev,
+SPECIAL_FUNCTION(void, e1000_get_ethtool_stats, struct net_device *netdev,
 				    struct ethtool_stats __always_unused *stats,
 				    u64 *data)
 {
@@ -2079,7 +2079,7 @@ static void e1000_get_ethtool_stats(struct net_device *netdev,
 	}
 }
 
-static void e1000_get_strings(struct net_device __always_unused *netdev,
+SPECIAL_FUNCTION(void, e1000_get_strings, struct net_device __always_unused *netdev,
 			      u32 stringset, u8 *data)
 {
 	u8 *p = data;
@@ -2099,7 +2099,7 @@ static void e1000_get_strings(struct net_device __always_unused *netdev,
 	}
 }
 
-static int e1000_get_rxnfc(struct net_device *netdev,
+SPECIAL_FUNCTION(int, e1000_get_rxnfc, struct net_device *netdev,
 			   struct ethtool_rxnfc *info,
 			   u32 __always_unused *rule_locs)
 {
@@ -2151,7 +2151,7 @@ static int e1000_get_rxnfc(struct net_device *netdev,
 	}
 }
 
-static int e1000e_get_eee(struct net_device *netdev, struct ethtool_eee *edata)
+SPECIAL_FUNCTION(int, e1000e_get_eee, struct net_device *netdev, struct ethtool_eee *edata)
 {
 	struct e1000_adapter *adapter = netdev_priv(netdev);
 	struct e1000_hw *hw = &adapter->hw;
@@ -2227,7 +2227,7 @@ release:
 	return ret_val;
 }
 
-static int e1000e_set_eee(struct net_device *netdev, struct ethtool_eee *edata)
+SPECIAL_FUNCTION(int, e1000e_set_eee, struct net_device *netdev, struct ethtool_eee *edata)
 {
 	struct e1000_adapter *adapter = netdev_priv(netdev);
 	struct e1000_hw *hw = &adapter->hw;
@@ -2270,7 +2270,7 @@ static int e1000e_set_eee(struct net_device *netdev, struct ethtool_eee *edata)
 	return 0;
 }
 
-static int e1000e_get_ts_info(struct net_device *netdev,
+SPECIAL_FUNCTION(int, e1000e_get_ts_info, struct net_device *netdev,
 			      struct ethtool_ts_info *info)
 {
 	struct e1000_adapter *adapter = netdev_priv(netdev);
@@ -2304,7 +2304,8 @@ static int e1000e_get_ts_info(struct net_device *netdev,
 	return 0;
 }
 
-static const struct ethtool_ops e1000_ethtool_ops = {
+
+SPECIAL_CONST_VAR(const struct ethtool_ops e1000_ethtool_ops) = {
 	.get_drvinfo		= e1000_get_drvinfo,
 	.get_regs_len		= e1000_get_regs_len,
 	.get_regs		= e1000_get_regs,

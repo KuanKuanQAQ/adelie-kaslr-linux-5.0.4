@@ -237,7 +237,7 @@ void e1000e_check_options(struct e1000_adapter *adapter)
 
 	/* Transmit Interrupt Delay */
 	{
-		static const struct e1000_option opt = {
+		const struct e1000_option opt = {
 			.type = range_option,
 			.name = "Transmit Interrupt Delay",
 			.err  = "using default of "
@@ -257,7 +257,7 @@ void e1000e_check_options(struct e1000_adapter *adapter)
 	}
 	/* Transmit Absolute Interrupt Delay */
 	{
-		static const struct e1000_option opt = {
+		const struct e1000_option opt = {
 			.type = range_option,
 			.name = "Transmit Absolute Interrupt Delay",
 			.err  = "using default of "
@@ -323,7 +323,7 @@ void e1000e_check_options(struct e1000_adapter *adapter)
 	}
 	/* Interrupt Throttling Rate */
 	{
-		static const struct e1000_option opt = {
+		const struct e1000_option opt = {
 			.type = range_option,
 			.name = "Interrupt Throttling Rate (ints/sec)",
 			.err  = "using default of "
@@ -445,7 +445,7 @@ void e1000e_check_options(struct e1000_adapter *adapter)
 	}
 	/* Smart Power Down */
 	{
-		static const struct e1000_option opt = {
+		const struct e1000_option opt = {
 			.type = enable_option,
 			.name = "PHY Smart Power Down",
 			.err  = "defaulting to Disabled",
@@ -462,7 +462,7 @@ void e1000e_check_options(struct e1000_adapter *adapter)
 	}
 	/* CRC Stripping */
 	{
-		static const struct e1000_option opt = {
+		const struct e1000_option opt = {
 			.type = enable_option,
 			.name = "CRC Stripping",
 			.err  = "defaulting to Enabled",
@@ -484,7 +484,7 @@ void e1000e_check_options(struct e1000_adapter *adapter)
 	}
 	/* Kumeran Lock Loss Workaround */
 	{
-		static const struct e1000_option opt = {
+		const struct e1000_option opt = {
 			.type = enable_option,
 			.name = "Kumeran Lock Loss Workaround",
 			.err  = "defaulting to Enabled",
@@ -505,7 +505,7 @@ void e1000e_check_options(struct e1000_adapter *adapter)
 	}
 	/* Write-protect NVM */
 	{
-		static const struct e1000_option opt = {
+		const struct e1000_option opt = {
 			.type = enable_option,
 			.name = "Write-protect NVM",
 			.err  = "defaulting to Enabled",

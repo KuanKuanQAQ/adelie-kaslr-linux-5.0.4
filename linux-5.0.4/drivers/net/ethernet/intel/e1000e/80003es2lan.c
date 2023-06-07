@@ -11,7 +11,7 @@
  * with a lower bound at "index" and the upper bound at
  * "index + 5".
  */
-static const u16 e1000_gg82563_cable_length_table[] = {
+const u16 e1000_gg82563_cable_length_table[] = {
 	0, 60, 115, 150, 150, 60, 115, 150, 180, 180, 0xFF
 };
 
@@ -1324,7 +1324,7 @@ static void e1000_clear_hw_cntrs_80003es2lan(struct e1000_hw *hw)
 	er32(ICRXDMTC);
 }
 
-static const struct e1000_mac_operations es2_mac_ops = {
+const struct e1000_mac_operations es2_mac_ops = {
 	.read_mac_addr		= e1000_read_mac_addr_80003es2lan,
 	.id_led_init		= e1000e_id_led_init_generic,
 	.blink_led		= e1000e_blink_led_generic,
@@ -1350,7 +1350,7 @@ static const struct e1000_mac_operations es2_mac_ops = {
 	.rar_get_count		= e1000e_rar_get_count_generic,
 };
 
-static const struct e1000_phy_operations es2_phy_ops = {
+const struct e1000_phy_operations es2_phy_ops = {
 	.acquire		= e1000_acquire_phy_80003es2lan,
 	.check_polarity		= e1000_check_polarity_m88,
 	.check_reset_block	= e1000e_check_reset_block_generic,
@@ -1368,7 +1368,7 @@ static const struct e1000_phy_operations es2_phy_ops = {
 	.cfg_on_link_up		= e1000_cfg_on_link_up_80003es2lan,
 };
 
-static const struct e1000_nvm_operations es2_nvm_ops = {
+const struct e1000_nvm_operations es2_nvm_ops = {
 	.acquire		= e1000_acquire_nvm_80003es2lan,
 	.read			= e1000e_read_nvm_eerd,
 	.release		= e1000_release_nvm_80003es2lan,

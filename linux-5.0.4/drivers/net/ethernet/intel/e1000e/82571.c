@@ -1852,7 +1852,7 @@ static void e1000_clear_hw_cntrs_82571(struct e1000_hw *hw)
 	er32(ICRXDMTC);
 }
 
-static const struct e1000_mac_operations e82571_mac_ops = {
+const struct e1000_mac_operations e82571_mac_ops = {
 	/* .check_mng_mode: mac type dependent */
 	/* .check_for_link: media type dependent */
 	.id_led_init		= e1000e_id_led_init_generic,
@@ -1877,7 +1877,7 @@ static const struct e1000_mac_operations e82571_mac_ops = {
 	.rar_get_count		= e1000e_rar_get_count_generic,
 };
 
-static const struct e1000_phy_operations e82_phy_ops_igp = {
+const struct e1000_phy_operations e82_phy_ops_igp = {
 	.acquire		= e1000_get_hw_semaphore_82571,
 	.check_polarity		= e1000_check_polarity_igp,
 	.check_reset_block	= e1000e_check_reset_block_generic,
@@ -1895,7 +1895,7 @@ static const struct e1000_phy_operations e82_phy_ops_igp = {
 	.cfg_on_link_up		= NULL,
 };
 
-static const struct e1000_phy_operations e82_phy_ops_m88 = {
+const struct e1000_phy_operations e82_phy_ops_m88 = {
 	.acquire		= e1000_get_hw_semaphore_82571,
 	.check_polarity		= e1000_check_polarity_m88,
 	.check_reset_block	= e1000e_check_reset_block_generic,
@@ -1913,7 +1913,7 @@ static const struct e1000_phy_operations e82_phy_ops_m88 = {
 	.cfg_on_link_up		= NULL,
 };
 
-static const struct e1000_phy_operations e82_phy_ops_bm = {
+const struct e1000_phy_operations e82_phy_ops_bm = {
 	.acquire		= e1000_get_hw_semaphore_82571,
 	.check_polarity		= e1000_check_polarity_m88,
 	.check_reset_block	= e1000e_check_reset_block_generic,
@@ -1931,7 +1931,7 @@ static const struct e1000_phy_operations e82_phy_ops_bm = {
 	.cfg_on_link_up		= NULL,
 };
 
-static const struct e1000_nvm_operations e82571_nvm_ops = {
+const struct e1000_nvm_operations e82571_nvm_ops = {
 	.acquire		= e1000_acquire_nvm_82571,
 	.read			= e1000e_read_nvm_eerd,
 	.release		= e1000_release_nvm_82571,
