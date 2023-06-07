@@ -1,9 +1,0 @@
-*~
-_*
-*.o
-*.d
-*.asm
-*.sym
-*.img
-.vscode/
-.DS_Store
