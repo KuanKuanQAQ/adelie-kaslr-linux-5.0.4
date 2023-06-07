@@ -79,14 +79,15 @@
  * to ensure complete separation of code and data, but
  * only when CONFIG_STRICT_MODULE_RWX=y
  */
-#ifdef CONFIG_STRICT_MODULE_RWX
+#if defined(CONFIG_STRICT_MODULE_RWX) || defined(CONFIG_X86_MODULE_RERANDOMIZE)
 # define debug_align(X) ALIGN(X, PAGE_SIZE)
 #else
 # define debug_align(X) (X)
 #endif
 
 /* If this is set, the section belongs in the init part of the module */
-#define INIT_OFFSET_MASK (1UL << (BITS_PER_LONG-1))
+#define INIT_OFFSET_MASK  (1UL << (BITS_PER_LONG-1))
+#define FIXED_OFFSET_MASK (1UL << (BITS_PER_LONG-2))
 
 /*
  * Mutex protects:
@@ -1226,6 +1227,17 @@ static ssize_t show_coresize(struct module_attribute *mattr,
 static struct module_attribute modinfo_coresize =
 	__ATTR(coresize, 0444, show_coresize, NULL);
 
+#ifdef CONFIG_X86_MODULE_RERANDOMIZE
+static ssize_t show_fixedsize(struct module_attribute *mattr,
+			     struct module_kobject *mk, char *buffer)
+{
+	return sprintf(buffer, "%u\n", mk->mod->fixed_layout.size);
+}
+
+static struct module_attribute modinfo_fixedsize =
+	__ATTR(fixedsize, 0444, show_fixedsize, NULL);
+#endif
+
 static ssize_t show_initsize(struct module_attribute *mattr,
 			     struct module_kobject *mk, char *buffer)
 {
@@ -1255,6 +1267,9 @@ static struct module_attribute *modinfo_attrs[] = {
 	&modinfo_initstate,
 	&modinfo_coresize,
 	&modinfo_initsize,
+#ifdef CONFIG_X86_MODULE_RERANDOMIZE
+	&modinfo_fixedsize,
+#endif
 	&modinfo_taint,
 #ifdef CONFIG_MODULE_UNLOAD
 	&modinfo_refcnt,
@@ -1942,6 +1957,10 @@ void module_disable_ro(const struct module *mod)
 	frob_ro_after_init(&mod->core_layout, set_memory_rw);
 	frob_text(&mod->init_layout, set_memory_rw);
 	frob_rodata(&mod->init_layout, set_memory_rw);
+
+	frob_text(&mod->fixed_layout, set_memory_rw);
+	frob_rodata(&mod->fixed_layout, set_memory_rw);
+	frob_ro_after_init(&mod->fixed_layout, set_memory_rw);
 }
 
 void module_enable_ro(const struct module *mod, bool after_init)
@@ -1954,26 +1973,39 @@ void module_enable_ro(const struct module *mod, bool after_init)
 	frob_text(&mod->init_layout, set_memory_ro);
 	frob_rodata(&mod->init_layout, set_memory_ro);
 
-	if (after_init)
+	frob_text(&mod->fixed_layout, set_memory_ro);
+	frob_rodata(&mod->fixed_layout, set_memory_ro);
+
+	if (after_init) {
 		frob_ro_after_init(&mod->core_layout, set_memory_ro);
+		frob_ro_after_init(&mod->fixed_layout, set_memory_ro);
+	}
 }
 
-static void module_enable_nx(const struct module *mod)
+void module_enable_nx(const struct module *mod)
 {
 	frob_rodata(&mod->core_layout, set_memory_nx);
 	frob_ro_after_init(&mod->core_layout, set_memory_nx);
 	frob_writable_data(&mod->core_layout, set_memory_nx);
 	frob_rodata(&mod->init_layout, set_memory_nx);
 	frob_writable_data(&mod->init_layout, set_memory_nx);
+
+	frob_rodata(&mod->fixed_layout, set_memory_nx);
+	frob_ro_after_init(&mod->fixed_layout, set_memory_nx);
+	frob_writable_data(&mod->fixed_layout, set_memory_nx);
 }
 
-static void module_disable_nx(const struct module *mod)
+void module_disable_nx(const struct module *mod)
 {
 	frob_rodata(&mod->core_layout, set_memory_x);
 	frob_ro_after_init(&mod->core_layout, set_memory_x);
 	frob_writable_data(&mod->core_layout, set_memory_x);
 	frob_rodata(&mod->init_layout, set_memory_x);
 	frob_writable_data(&mod->init_layout, set_memory_x);
+
+	frob_rodata(&mod->fixed_layout, set_memory_x);
+	frob_ro_after_init(&mod->fixed_layout, set_memory_x);
+	frob_writable_data(&mod->fixed_layout, set_memory_x);
 }
 
 /* Iterate through all modules and set each module's text as RW */
@@ -1991,6 +2023,7 @@ void set_all_modules_text_rw(void)
 
 		frob_text(&mod->core_layout, set_memory_rw);
 		frob_text(&mod->init_layout, set_memory_rw);
+		frob_text(&mod->fixed_layout, set_memory_rw);
 	}
 	mutex_unlock(&module_mutex);
 }
@@ -2016,6 +2049,7 @@ void set_all_modules_text_ro(void)
 
 		frob_text(&mod->core_layout, set_memory_ro);
 		frob_text(&mod->init_layout, set_memory_ro);
+		frob_text(&mod->fixed_layout, set_memory_ro);
 	}
 	mutex_unlock(&module_mutex);
 }
@@ -2034,11 +2068,9 @@ static void disable_ro_nx(const struct module_layout *layout)
 
 #else
 static void disable_ro_nx(const struct module_layout *layout) { }
-static void module_enable_nx(const struct module *mod) { }
-static void module_disable_nx(const struct module *mod) { }
 #endif
 
-#ifdef CONFIG_LIVEPATCH
+#if defined(CONFIG_LIVEPATCH) || defined(CONFIG_X86_MODULE_RERANDOMIZE)
 /*
  * Persist Elf information about a module. Copy the Elf header,
  * section header table, section string table, and symtab section
@@ -2049,10 +2081,13 @@ static int copy_module_elf(struct module *mod, struct load_info *info)
 	unsigned int size, symndx;
 	int ret;
 
-	size = sizeof(*mod->klp_info);
-	mod->klp_info = kmalloc(size, GFP_KERNEL);
-	if (mod->klp_info == NULL)
-		return -ENOMEM;
+	if (is_randomizable_module(mod)) {
+		/* klp_info is already allocated */
+		size = sizeof(*mod->klp_info);
+		mod->klp_info = kmalloc(size, GFP_KERNEL);
+		if (mod->klp_info == NULL)
+			return -ENOMEM;
+	}
 
 	/* Elf header */
 	size = sizeof(mod->klp_info->hdr);
@@ -2093,6 +2128,7 @@ free_sechdrs:
 	kfree(mod->klp_info->sechdrs);
 free_info:
 	kfree(mod->klp_info);
+	mod->klp_info = NULL;
 	return ret;
 }
 
@@ -2126,6 +2162,19 @@ void __weak module_arch_freeing_init(struct module *mod)
 {
 }
 
+
+/* Free core and fixed part of the module */
+static void module_memfree_non_init(struct module *mod)
+{
+	/* struct module could either be in fixed or core.
+	 * mod struct can not be accessed after free. */
+	void *core_base = mod->core_layout.base;
+	void *fixed_base = mod->fixed_layout.base;
+
+	module_memfree(core_base);
+	module_memfree(fixed_base);
+}
+
 /* Free a module, remove from lists, etc. */
 static void free_module(struct module *mod)
 {
@@ -2151,7 +2200,7 @@ static void free_module(struct module *mod)
 	/* Free any allocated parameters. */
 	destroy_params(mod->kp, mod->num_kp);
 
-	if (is_livepatch_module(mod))
+	if (is_livepatch_module(mod) || is_randomizable_module(mod))
 		free_module_elf(mod);
 
 	/* Now we can delete it from the lists */
@@ -2177,7 +2226,8 @@ static void free_module(struct module *mod)
 
 	/* Finally, free the core (containing the module structure) */
 	disable_ro_nx(&mod->core_layout);
-	module_memfree(mod->core_layout.base);
+	disable_ro_nx(&mod->fixed_layout);
+	module_memfree_non_init(mod);
 }
 
 void *__symbol_get(const char *symbol)
@@ -2373,42 +2423,51 @@ static void layout_sections(struct module *mod, struct load_info *info)
 	};
 	unsigned int m, i;
 
-	for (i = 0; i < info->hdr->e_shnum; i++)
+	for (i = 0; i < info->hdr->e_shnum; i++) {
 		info->sechdrs[i].sh_entsize = ~0UL;
+#ifdef CONFIG_X86_MODULE_RERANDOMIZE
+		if (is_randomizable_module(mod) &&
+				info->sechdrs[i].sh_type == SHT_RELA) {
+			info->sechdrs[i].sh_flags |= SHF_ALLOC;
+		}
+#endif
+	}
 
-	pr_debug("Core section allocation order:\n");
+if(is_randomizable_module(mod)) {
+	/* Fixed sections allocation */
+	pr_debug("Fixed section allocation order:\n");
 	for (m = 0; m < ARRAY_SIZE(masks); ++m) {
-		for (i = 0; i < info->hdr->e_shnum; ++i) {
+		for (i = 0; i < info->hdr->e_shnum; ++i){
 			Elf_Shdr *s = &info->sechdrs[i];
 			const char *sname = info->secstrings + s->sh_name;
-
-			if ((s->sh_flags & masks[m][0]) != masks[m][0]
+			if((s->sh_flags & masks[m][0]) != masks[m][0]
 			    || (s->sh_flags & masks[m][1])
 			    || s->sh_entsize != ~0UL
-			    || strstarts(sname, ".init"))
+			    || !module_is_fixed_section_name(sname))
 				continue;
-			s->sh_entsize = get_offset(mod, &mod->core_layout.size, s, i);
+			s->sh_entsize = (get_offset(mod, &mod->fixed_layout.size, s, i)
+								 | FIXED_OFFSET_MASK);
 			pr_debug("\t%s\n", sname);
 		}
 		switch (m) {
 		case 0: /* executable */
-			mod->core_layout.size = debug_align(mod->core_layout.size);
-			mod->core_layout.text_size = mod->core_layout.size;
+			mod->fixed_layout.size = debug_align(mod->fixed_layout.size);
+			mod->fixed_layout.text_size = mod->fixed_layout.size;
 			break;
 		case 1: /* RO: text and ro-data */
-			mod->core_layout.size = debug_align(mod->core_layout.size);
-			mod->core_layout.ro_size = mod->core_layout.size;
+			mod->fixed_layout.size = debug_align(mod->fixed_layout.size);
+			mod->fixed_layout.ro_size = mod->fixed_layout.size;
 			break;
 		case 2: /* RO after init */
-			mod->core_layout.size = debug_align(mod->core_layout.size);
-			mod->core_layout.ro_after_init_size = mod->core_layout.size;
+			mod->fixed_layout.size = debug_align(mod->fixed_layout.size);
+			mod->fixed_layout.ro_after_init_size = mod->fixed_layout.size;
 			break;
-		case 4: /* whole core */
-			mod->core_layout.size = debug_align(mod->core_layout.size);
+		case 4: /* whole init */
+			mod->fixed_layout.size = debug_align(mod->fixed_layout.size);
 			break;
 		}
 	}
-
+} else {
 	pr_debug("Init section allocation order:\n");
 	for (m = 0; m < ARRAY_SIZE(masks); ++m) {
 		for (i = 0; i < info->hdr->e_shnum; ++i) {
@@ -2442,6 +2501,39 @@ static void layout_sections(struct module *mod, struct load_info *info)
 			break;
 		case 4: /* whole init */
 			mod->init_layout.size = debug_align(mod->init_layout.size);
+			break;
+		}
+	}
+} /* is_randomizable_module(mod) */
+
+	pr_debug("Core section allocation order:\n");
+	for (m = 0; m < ARRAY_SIZE(masks); ++m) {
+		for (i = 0; i < info->hdr->e_shnum; ++i) {
+			Elf_Shdr *s = &info->sechdrs[i];
+			const char *sname = info->secstrings + s->sh_name;
+
+			if ((s->sh_flags & masks[m][0]) != masks[m][0]
+			    || (s->sh_flags & masks[m][1])
+			    || s->sh_entsize != ~0UL)
+				continue;
+			s->sh_entsize = get_offset(mod, &mod->core_layout.size, s, i);
+			pr_debug("\t%s\n", sname);
+		}
+		switch (m) {
+		case 0: /* executable */
+			mod->core_layout.size = debug_align(mod->core_layout.size);
+			mod->core_layout.text_size = mod->core_layout.size;
+			break;
+		case 1: /* RO: text and ro-data */
+			mod->core_layout.size = debug_align(mod->core_layout.size);
+			mod->core_layout.ro_size = mod->core_layout.size;
+			break;
+		case 2: /* RO after init */
+			mod->core_layout.size = debug_align(mod->core_layout.size);
+			mod->core_layout.ro_after_init_size = mod->core_layout.size;
+			break;
+		case 4: /* whole core */
+			mod->core_layout.size = debug_align(mod->core_layout.size);
 			break;
 		}
 	}
@@ -2636,6 +2728,7 @@ static void layout_symtab(struct module *mod, struct load_info *info)
 	/* Compute total space required for the core symbols' strtab. */
 	for (ndst = i = 0; i < nsrc; i++) {
 		if (i == 0 || is_livepatch_module(mod) ||
+		    is_randomizable_module(mod) ||
 		    is_core_symbol(src+i, info->sechdrs, info->hdr->e_shnum,
 				   info->index.pcpu)) {
 			strtab_size += strlen(&info->strtab[src[i].st_name])+1;
@@ -2695,6 +2788,7 @@ static void add_kallsyms(struct module *mod, const struct load_info *info)
 	src = mod->kallsyms->symtab;
 	for (ndst = i = 0; i < mod->kallsyms->num_symtab; i++) {
 		if (i == 0 || is_livepatch_module(mod) ||
+		    is_randomizable_module(mod) ||
 		    is_core_symbol(src+i, info->sechdrs, info->hdr->e_shnum,
 				   info->index.pcpu)) {
 			dst[ndst] = src[i];
@@ -3042,6 +3136,12 @@ static int check_modinfo(struct module *mod, struct load_info *info, int flags)
 	if (err)
 		return err;
 
+#ifdef CONFIG_X86_MODULE_RERANDOMIZE
+	if (get_modinfo(info, "randomizable")) {
+		mod->randomizable = true;
+	}
+#endif
+
 	/* Set up license info based on the info section */
 	set_license(mod, get_modinfo(info, "license"));
 
@@ -3162,6 +3262,21 @@ static int move_module(struct module *mod, struct load_info *info)
 	memset(ptr, 0, mod->core_layout.size);
 	mod->core_layout.base = ptr;
 
+	/* Allocate fixed section */
+	if (mod->fixed_layout.size) {
+		ptr = module_alloc(mod->fixed_layout.size);
+		kmemleak_not_leak(ptr);
+		if (!ptr) {
+			module_memfree(mod->core_layout.base);
+			return -ENOMEM;
+		}
+
+		memset(ptr, 0, mod->fixed_layout.size);
+		mod->fixed_layout.base = ptr;
+	} else {
+		mod->fixed_layout.base = NULL;
+	}
+
 	if (mod->init_layout.size) {
 		ptr = module_alloc(mod->init_layout.size);
 		/*
@@ -3172,6 +3287,9 @@ static int move_module(struct module *mod, struct load_info *info)
 		 */
 		kmemleak_ignore(ptr);
 		if (!ptr) {
+			if (mod->fixed_layout.base) {
+				module_memfree(mod->fixed_layout.base);
+			}
 			module_memfree(mod->core_layout.base);
 			return -ENOMEM;
 		}
@@ -3192,6 +3310,9 @@ static int move_module(struct module *mod, struct load_info *info)
 		if (shdr->sh_entsize & INIT_OFFSET_MASK)
 			dest = mod->init_layout.base
 				+ (shdr->sh_entsize & ~INIT_OFFSET_MASK);
+		else if (shdr->sh_entsize & FIXED_OFFSET_MASK)
+			dest = mod->fixed_layout.base
+				+ (shdr->sh_entsize & ~FIXED_OFFSET_MASK);
 		else
 			dest = mod->core_layout.base + shdr->sh_entsize;
 
@@ -3266,6 +3387,9 @@ static void flush_module_icache(const struct module *mod)
 				   + mod->init_layout.size);
 	flush_icache_range((unsigned long)mod->core_layout.base,
 			   (unsigned long)mod->core_layout.base + mod->core_layout.size);
+	if (mod->fixed_layout.base)
+		flush_icache_range((unsigned long)mod->fixed_layout.base,
+			   (unsigned long)mod->fixed_layout.base + mod->fixed_layout.size);
 
 	set_fs(old_fs);
 }
@@ -3274,6 +3398,11 @@ int __weak module_frob_arch_sections(Elf_Ehdr *hdr,
 				     Elf_Shdr *sechdrs,
 				     char *secstrings,
 				     struct module *mod)
+{
+	return 0;
+}
+
+int __weak module_arch_preinit(struct module *mod)
 {
 	return 0;
 }
@@ -3309,11 +3438,23 @@ static struct module *layout_and_allocate(struct load_info *info, int flags)
 	if (err)
 		return ERR_PTR(err);
 
+	mod = info->mod;
+	if (is_randomizable_module(mod)) {
+		/* Early set up klp_info with temporary data */
+		mod->klp_info = kmalloc(sizeof(*mod->klp_info), GFP_KERNEL);
+		if (mod->klp_info == NULL)
+			return ERR_PTR(-ENOMEM);
+		memcpy(&mod->klp_info->hdr, info->hdr, sizeof(mod->klp_info->hdr));
+		mod->klp_info->symndx = info->index.sym;
+		mod->klp_info->secstrings = info->secstrings;
+		mod->klp_info->sechdrs = info->sechdrs;
+	}
+
 	/* Allow arches to frob section contents and sizes.  */
 	err = module_frob_arch_sections(info->hdr, info->sechdrs,
 					info->secstrings, info->mod);
 	if (err < 0)
-		return ERR_PTR(err);
+		goto free_klp;
 
 	/* We will do a special allocation for per-cpu sections later. */
 	info->sechdrs[info->index.pcpu].sh_flags &= ~(unsigned long)SHF_ALLOC;
@@ -3345,12 +3486,17 @@ static struct module *layout_and_allocate(struct load_info *info, int flags)
 	/* Allocate and move to the final place */
 	err = move_module(info->mod, info);
 	if (err)
-		return ERR_PTR(err);
+		goto free_klp;
 
 	/* Module has been copied to its final place now: return it. */
 	mod = (void *)info->sechdrs[info->index.mod].sh_addr;
 	kmemleak_load_module(mod, info);
 	return mod;
+
+ free_klp:
+	if (is_randomizable_module(mod))
+		kfree(mod->klp_info);
+	return ERR_PTR(err);
 }
 
 /* mod is no longer valid after this! */
@@ -3359,7 +3505,7 @@ static void module_deallocate(struct module *mod, struct load_info *info)
 	percpu_modfree(mod);
 	module_arch_freeing_init(mod);
 	module_memfree(mod->init_layout.base);
-	module_memfree(mod->core_layout.base);
+	module_memfree_non_init(mod);
 }
 
 int __weak module_finalize(const Elf_Ehdr *hdr,
@@ -3793,7 +3939,7 @@ static int load_module(struct load_info *info, const char __user *uargs,
 	if (err < 0)
 		goto coming_cleanup;
 
-	if (is_livepatch_module(mod)) {
+	if (is_livepatch_module(mod) || is_randomizable_module(mod)) {
 		err = copy_module_elf(mod, info);
 		if (err < 0)
 			goto sysfs_cleanup;
@@ -3804,6 +3950,8 @@ static int load_module(struct load_info *info, const char __user *uargs,
 
 	/* Done! */
 	trace_module_load(mod);
+
+	module_arch_preinit(mod);
 
 	return do_init_module(mod);
 
@@ -4421,6 +4569,40 @@ void print_modules(void)
 	pr_cont("\n");
 }
 
+#ifdef CONFIG_X86_MODULE_RERANDOMIZE
+static void update_module_klp(struct module *mod, unsigned long delta)
+{
+	unsigned int i;
+	Elf_Shdr *shdrs = mod->klp_info->sechdrs;
+
+//	printk("update_module_klp\n");
+
+	/* Update Elf_Shdr.sh_addr of core sections */
+	for (i = 1; i < mod->klp_info->hdr.e_shnum; i++) {
+		if (!module_is_fixed_section(mod, i))
+			INC_BY_DELTA(shdrs[i].sh_addr, delta);
+	}
+
+}
+
+void update_module_ref(struct module *mod, unsigned long delta){
+//	printk("update_module_ref\n");
+
+	mutex_lock(&module_mutex);
+
+	mod_tree_remove(mod);
+
+	INC_BY_DELTA(mod->core_layout.base, delta);
+
+	mod_update_bounds(mod);
+	mod_tree_insert(mod);
+
+	update_module_klp(mod, delta);
+
+	mutex_unlock(&module_mutex);
+}
+#endif /* CONFIG_X86_MODULE_RERANDOMIZE */
+
 #ifdef CONFIG_MODVERSIONS
 /* Generate the signature for all relevant module structures here.
  * If these change, we don't want to try to parse the module. */
@@ -4433,3 +4615,4 @@ void module_layout(struct module *mod,
 }
 EXPORT_SYMBOL(module_layout);
 #endif
+

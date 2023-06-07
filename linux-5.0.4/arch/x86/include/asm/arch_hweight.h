@@ -3,6 +3,7 @@
 #define _ASM_X86_HWEIGHT_H
 
 #include <asm/cpufeatures.h>
+#include <asm/asm.h>
 
 #ifdef CONFIG_64BIT
 #define REG_IN "D"
@@ -18,7 +19,7 @@ static __always_inline unsigned int __arch_hweight32(unsigned int w)
 {
 	unsigned int res;
 
-	asm (ALTERNATIVE("call __sw_hweight32", "popcntl %1, %0", X86_FEATURE_POPCNT)
+	asm (ALTERNATIVE(_ASM_CALL(__sw_hweight32), "popcntl %1, %0", X86_FEATURE_POPCNT)
 			 : "="REG_OUT (res)
 			 : REG_IN (w));
 
@@ -46,7 +47,7 @@ static __always_inline unsigned long __arch_hweight64(__u64 w)
 {
 	unsigned long res;
 
-	asm (ALTERNATIVE("call __sw_hweight64", "popcntq %1, %0", X86_FEATURE_POPCNT)
+	asm (ALTERNATIVE(_ASM_CALL(__sw_hweight64), "popcntq %1, %0", X86_FEATURE_POPCNT)
 			 : "="REG_OUT (res)
 			 : REG_IN (w));
 

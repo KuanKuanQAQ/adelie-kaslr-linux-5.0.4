@@ -28,7 +28,7 @@
 # define __BUG_REL(val)	".long " __stringify(val) " - 2b"
 #endif
 
-#ifdef CONFIG_DEBUG_BUGVERBOSE
+#if defined(CONFIG_DEBUG_BUGVERBOSE) && !defined(__clang__)
 
 #define _BUG_FLAGS(ins, flags)						\
 do {									\
@@ -40,7 +40,7 @@ do {									\
 		     "\t.word %c2"        "\t# bug_entry::flags\n"	\
 		     "\t.org 2b+%c3\n"					\
 		     ".popsection"					\
-		     : : "i" (__FILE__), "i" (__LINE__),		\
+		     : : "X" (__FILE__), "i" (__LINE__),		\
 			 "i" (flags),					\
 			 "i" (sizeof(struct bug_entry)));		\
 } while (0)

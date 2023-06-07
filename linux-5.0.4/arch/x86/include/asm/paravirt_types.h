@@ -342,9 +342,28 @@ extern struct paravirt_patch_template pv_ops;
 #define PARAVIRT_PATCH(x)					\
 	(offsetof(struct paravirt_patch_template, x) / sizeof(void *))
 
+#if defined(CONFIG_X86_PIE) || (defined(MODULE) && defined(CONFIG_X86_PIC))
+#ifdef __clang__
+  #define paravirt_opptr_call ""
+  #define paravirt_opptr_type "m"
+#else
+  #define paravirt_opptr_call "a"
+  #define paravirt_opptr_type "p"
+#endif
+#else
+#define paravirt_opptr_call "c"
+#define paravirt_opptr_type "i"
+#endif
+
+#ifdef __clang__
 #define paravirt_type(op)				\
 	[paravirt_typenum] "i" (PARAVIRT_PATCH(op)),	\
-	[paravirt_opptr] "i" (&(pv_ops.op))
+	[paravirt_opptr] paravirt_opptr_type ((op))
+#else
+#define paravirt_type(op)				\
+	[paravirt_typenum] "i" (PARAVIRT_PATCH(op)),	\
+	[paravirt_opptr] paravirt_opptr_type (&(pv_ops.op))
+#endif
 #define paravirt_clobber(clobber)		\
 	[paravirt_clobber] "i" (clobber)
 
@@ -352,7 +371,11 @@ extern struct paravirt_patch_template pv_ops;
  * Generate some code, and mark it as patchable by the
  * apply_paravirt() alternate instruction patcher.
  */
-#define _paravirt_alt(insn_string, type, clobber)	\
+#if defined(MODULE) && defined(CONFIG_X86_PIC)
+# define _paravirt_alt(insn_string, type, clobber)	\
+	insn_string "\n"
+#else
+# define _paravirt_alt(insn_string, type, clobber)	\
 	"771:\n\t" insn_string "\n" "772:\n"		\
 	".pushsection .parainstructions,\"a\"\n"	\
 	_ASM_ALIGN "\n"					\
@@ -361,6 +384,7 @@ extern struct paravirt_patch_template pv_ops;
 	"  .byte 772b-771b\n"				\
 	"  .short " clobber "\n"			\
 	".popsection\n"
+#endif
 
 /* Generate patchable code, with the default asm parameters. */
 #define paravirt_alt(insn_string)					\
@@ -392,7 +416,7 @@ int paravirt_disable_iospace(void);
  */
 #define PARAVIRT_CALL					\
 	ANNOTATE_RETPOLINE_SAFE				\
-	"call *%c[paravirt_opptr];"
+	"call *%" paravirt_opptr_call "[paravirt_opptr];"
 
 /*
  * These macros are intended to wrap calls through one of the paravirt

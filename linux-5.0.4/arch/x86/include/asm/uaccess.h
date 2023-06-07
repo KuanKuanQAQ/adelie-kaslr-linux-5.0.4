@@ -11,6 +11,7 @@
 #include <asm/page.h>
 #include <asm/smap.h>
 #include <asm/extable.h>
+#include <asm/nospec-branch.h>
 
 /*
  * The fs value determines whether argument validity checking should be
@@ -165,13 +166,55 @@ __typeof__(__builtin_choose_expr(sizeof(x) > sizeof(0UL), 0ULL, 0UL))
  * Clang/LLVM cares about the size of the register, but still wants
  * the base register for something that ends up being a pair.
  */
+#if defined(CONFIG_RETPOLINE) && defined(MODULE) && defined(CONFIG_X86_PIC)
+/*
+ * Handle specially for PIC modules when RETPOLINE is enabled
+ * to avoid %rax from being clobbered by the corresponding PLT stub.
+ */
+#define get_user(x, ptr)						\
+({									\
+	void *__target;							\
+	int __ret_gu;							\
+	register __inttype(*(ptr)) __val_gu asm("%"_ASM_DX);		\
+	__chk_user_ptr(ptr);						\
+	might_fault();							\
+	switch (sizeof(*(ptr))) {					\
+	case 1:								\
+		__target = &__get_user_1;				\
+		break;							\
+	case 2:								\
+		__target = &__get_user_2;				\
+		break;							\
+	case 4:								\
+		__target = &__get_user_4;				\
+		break;							\
+	case 8:								\
+		__target = &__get_user_8;				\
+		break;							\
+	default:							\
+		__target = &__get_user_bad;				\
+		break;							\
+	}								\
+	asm volatile(CALL_NOSPEC					\
+		     : "=a" (__ret_gu), "=r" (__val_gu),		\
+			ASM_CALL_CONSTRAINT				\
+		     : "0" (ptr), [thunk_target] "r" (__target));	\
+	(x) = (__force __typeof__(*(ptr))) __val_gu;			\
+	__builtin_expect(__ret_gu, 0);					\
+})
+
+#define __put_user_x(size, x, ptr, __ret_pu)				\
+	asm volatile(CALL_NOSPEC : "=a" (__ret_pu)			\
+		     : "0" ((typeof(*(ptr)))(x)), "c" (ptr),		\
+			[thunk_target] "r" (&__put_user_##size) : "ebx")
+#else
 #define get_user(x, ptr)						\
 ({									\
 	int __ret_gu;							\
 	register __inttype(*(ptr)) __val_gu asm("%"_ASM_DX);		\
 	__chk_user_ptr(ptr);						\
 	might_fault();							\
-	asm volatile("call __get_user_%P4"				\
+	asm volatile(_ASM_CALL(__get_user_%P4)				\
 		     : "=a" (__ret_gu), "=r" (__val_gu),		\
 			ASM_CALL_CONSTRAINT				\
 		     : "0" (ptr), "i" (sizeof(*(ptr))));		\
@@ -180,9 +223,9 @@ __typeof__(__builtin_choose_expr(sizeof(x) > sizeof(0UL), 0ULL, 0UL))
 })
 
 #define __put_user_x(size, x, ptr, __ret_pu)			\
-	asm volatile("call __put_user_" #size : "=a" (__ret_pu)	\
+	asm volatile(_ASM_CALL(__put_user_##size) : "=a" (__ret_pu)	\
 		     : "0" ((typeof(*(ptr)))(x)), "c" (ptr) : "ebx")
-
+#endif
 
 
 #ifdef CONFIG_X86_32
@@ -204,9 +247,16 @@ __typeof__(__builtin_choose_expr(sizeof(x) > sizeof(0UL), 0ULL, 0UL))
 		     _ASM_EXTABLE_EX(2b, 3b)				\
 		     : : "A" (x), "r" (addr))
 
+#if defined(CONFIG_RETPOLINE) && defined(MODULE) && defined(CONFIG_X86_PIC)
 #define __put_user_x8(x, ptr, __ret_pu)				\
-	asm volatile("call __put_user_8" : "=a" (__ret_pu)	\
+	asm volatile(CALL_NOSPEC : "=a" (__ret_pu)		\
+		     : "A" ((typeof(*(ptr)))(x)), "c" (ptr),	\
+			[thunk_target] "r" (&__put_user_8) : "ebx")
+#else
+#define __put_user_x8(x, ptr, __ret_pu)				\
+	asm volatile(_ASM_CALL(__put_user_8) : "=a" (__ret_pu)	\
 		     : "A" ((typeof(*(ptr)))(x)), "c" (ptr) : "ebx")
+#endif
 #else
 #define __put_user_goto_u64(x, ptr, label) \
 	__put_user_goto(x, ptr, "q", "", "er", label)
@@ -264,7 +314,7 @@ extern void __put_user_8(void);
 		__put_user_x8(__pu_val, ptr, __ret_pu);		\
 		break;						\
 	default:						\
-		__put_user_x(X, __pu_val, ptr, __ret_pu);	\
+		__put_user_x(bad, __pu_val, ptr, __ret_pu);	\
 		break;						\
 	}							\
 	__builtin_expect(__ret_pu, 0);				\

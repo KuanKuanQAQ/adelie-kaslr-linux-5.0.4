@@ -2752,3 +2752,122 @@ module_init(proc_vmalloc_init);
 
 #endif
 
+static void unmap_deallocate_pages(struct vm_struct *area,
+		unsigned long start, unsigned long end)
+{
+	unsigned int i;
+
+	for (i = start; i < end; i++) {
+		struct page *page = area->pages[i];
+
+		BUG_ON(!page);
+		__free_pages(page, 0);
+	}
+}
+
+static int remap_create_phy_pages(struct vm_struct *area, gfp_t gfp_mask, int node,
+		unsigned long start, unsigned long end)
+{
+	unsigned int i;
+	const gfp_t alloc_mask = gfp_mask | __GFP_NOWARN;
+	const gfp_t highmem_mask = (gfp_mask & (GFP_DMA | GFP_DMA32)) ?
+					0 :
+					__GFP_HIGHMEM;
+
+	for (i = start; i < end; i++) {
+		struct page *page;
+
+		if (node == NUMA_NO_NODE)
+			page = alloc_page(alloc_mask|highmem_mask);
+		else
+			page = alloc_pages_node(node, alloc_mask|highmem_mask, 0);
+
+		if (unlikely(!page)) {
+			unmap_deallocate_pages(area, start, i);
+			return -1;
+		}
+		area->pages[i] = page;
+		if (gfpflags_allow_blocking(gfp_mask|highmem_mask))
+			cond_resched();
+	}
+
+	return 0;
+}
+
+void *remap_module(unsigned long addr, unsigned long size,
+		unsigned long new_phy_addr, unsigned long new_phy_size,
+		unsigned long align, unsigned long start, unsigned long end,
+		gfp_t gfp_mask, pgprot_t prot, unsigned long vm_flags,
+		int node, const void *caller)
+{
+	struct vmap_area *va;
+	struct vm_struct *area;
+	struct vm_struct *old_area;
+
+	/* Sanity check the addresses */
+	if(new_phy_size &&
+	  (new_phy_addr < addr ||
+	  new_phy_addr >= addr + size ||
+	  new_phy_addr + new_phy_size > addr + size ||
+	  !size || (size >> PAGE_SHIFT) > totalram_pages ||
+	  PAGE_ALIGN(size) != size ||
+	  PAGE_ALIGN(new_phy_addr) != new_phy_addr ||
+	  PAGE_ALIGN(new_phy_size) != new_phy_size)) {
+		pr_err("remap_module: Bad addresses\n");
+		return NULL;
+	}
+
+	va = find_vmap_area(addr);
+	if(va == NULL){
+		pr_err("remap_module: vmap_area is null\n");
+		return NULL;
+	}
+	old_area = va->vm;
+
+	area = __get_vm_area_node(size, align, VM_ALLOC | VM_UNINITIALIZED |
+				vm_flags, start, end, node, gfp_mask, caller);
+	if (!area) {
+		pr_err("remap_module: __get_vm_area_node failed\n");
+		return NULL;
+	}
+
+	area->nr_pages = old_area->nr_pages;
+	area->pages = old_area->pages;
+	if (new_phy_size) {
+		unsigned int start = (new_phy_addr - addr)/PAGE_SIZE;
+		unsigned int end = start + new_phy_size/PAGE_SIZE;
+	//	printk("start = %u\n", start);
+	//	printk("end = %u\n", end);
+		if (remap_create_phy_pages(area, gfp_mask, node, start, end))
+			return NULL;
+	}
+
+	if (map_vm_area(area, prot, area->pages)) {
+		pr_err("remap_module: map_vm_area failed\n");
+		return NULL;
+	}
+
+	clear_vm_uninitialized_flag(area);
+	kmemleak_vmalloc(area, size, gfp_mask);
+
+	return area->addr;
+}
+EXPORT_SYMBOL(remap_module);
+
+// vfree()
+void unmap_module(const void *addr,
+		const void *new_phy_addr, unsigned long new_phy_size)
+{
+	if (new_phy_size) {
+		unsigned int start = (new_phy_addr - addr)/PAGE_SIZE;
+		unsigned int end = start + new_phy_size/PAGE_SIZE;
+		struct vm_struct *area = find_vmap_area((unsigned long)addr)->vm;
+		unmap_deallocate_pages(area, start, end);
+	}
+
+	vunmap(addr);
+}
+EXPORT_SYMBOL(unmap_module);
+
+// remove
+EXPORT_SYMBOL(__vmalloc_node_range);

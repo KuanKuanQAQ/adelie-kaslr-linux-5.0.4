@@ -4,6 +4,138 @@
 
 #include <asm-generic/module.h>
 #include <asm/orc_types.h>
+#include <asm/asm.h>
+#include <smr/smr.h>
+
+#ifdef CONFIG_X86_MODULE_RERANDOMIZE
+
+void init_profile_rand(void);
+void print_profile_rand(void);
+struct Profile_Rand {
+	u64 count_rand;
+	u64 count_smr_retire;
+	u64 count_smr_free;
+	u64 count_stack_alloc;
+	u64 count_stack_free;
+};
+extern struct Profile_Rand profile_rand;
+
+void *module_rerandomize(struct module *mod);
+void module_unmap(struct module *mod, void *addr);
+
+#ifdef CONFIG_X86_MODULE_RERANDOMIZE_STACK
+void module_init_stacks(void);
+void module_rerandomize_stack(void);
+void module_stack_empty_trash(void);
+void * module_get_stack(void);
+void module_offer_stack(void *);
+#endif /* CONFIG_X86_MODULE_RERANDOMIZE_STACK */
+
+#define __FILENAME__ (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
+#define printp(x) printk("(%s.%03d): " #x " = 0x%lx\n", __FILENAME__, __LINE__, (unsigned long)(x))
+#define INC_BY_DELTA(x, delta) ( x = (typeof((x))) ((unsigned long)(x) + (unsigned long)(delta)) )
+
+
+/* Places the variable in a special section
+ * Makes visibility default */
+#define SPECIAL_VAR(x) x __attribute__ ((section (".fixed.data")))
+#define SPECIAL_CONST_VAR(x) x __attribute__ ((section (".fixed.rodata")))
+
+
+#define SPECIAL_FUNCTION_PROTO(ret, name, args...)  \
+	noinline ret __attribute__ ((section (".fixed.text"))) __attribute__((naked)) name(args)
+
+#ifdef CONFIG_X86_MODULE_RERANDOMIZE_STACK
+#define MOD_GET_STACK()                                 \
+	asm (_ASM_CALL(module_get_stack));              \
+	asm ("mov %rax, %rsp")
+#define MOD_OFFER_STACK()                               \
+	asm ("mov %rsp, %rdi");                         \
+	asm ("lea -0x40(%rbp), %rsp")
+#define MOD_OFFER_STACK_CALL()                          \
+	asm (_ASM_CALL(module_offer_stack))
+#else
+#define MOD_GET_STACK()
+#define MOD_OFFER_STACK()
+#define MOD_OFFER_STACK_CALL()
+#endif
+
+#define SPECIAL_FUNCTION(ret, name, args...) \
+_Pragma("GCC diagnostic push") \
+_Pragma("GCC diagnostic ignored \"-Wreturn-type\"") \
+_Pragma("GCC diagnostic ignored \"-Wattributes\"") \
+ret __attribute__ ((visibility("hidden"))) name## _ ##real(args);\
+SPECIAL_FUNCTION_PROTO(ret, name, args) {               \
+	/* Save base pointer */                         \
+	asm ("push %rbp");                              \
+	asm ("mov %rsp, %rbp");                         \
+	/* Save Args */                                 \
+	asm ("push %rdi");                              \
+	asm ("push %rsi");                              \
+	asm ("push %rdx");                              \
+	asm ("push %rcx");                              \
+	asm ("push %r8");                               \
+	asm ("push %r9");                               \
+	/* Call smr_enter save return */                \
+	asm (_ASM_CALL(smr_enter));                     \
+	asm ("push %rax");                              \
+	asm ("push %rdx");                              \
+	/* Get new stack */                             \
+	MOD_GET_STACK();                                \
+	/* Restore Args*/                               \
+	asm ("mov -0x30(%rbp), %r9");                   \
+	asm ("mov -0x28(%rbp), %r8");                   \
+	asm ("mov -0x20(%rbp), %rcx");                  \
+	asm ("mov -0x18(%rbp), %rdx");                  \
+	asm ("mov -0x10(%rbp), %rsi");                  \
+	asm ("mov -0x8(%rbp), %rdi");                   \
+	asm (_ASM_CALL(name## _ ##real));               \
+	/* Restore old stack */                         \
+	MOD_OFFER_STACK();                              \
+	asm ("mov %rax, %rbp");                         \
+	MOD_OFFER_STACK_CALL();                         \
+	/* Prepare smr_leave args */                    \
+	asm ("pop %rsi");                               \
+	asm ("pop %rdi");                               \
+	asm ("add $48, %rsp");				\
+	asm (_ASM_CALL(smr_leave));                     \
+	asm ("mov %rbp, %rax");                         \
+	/* Restore base pointer */                      \
+	asm ("pop %rbp");                               \
+	asm ("ret");                                    \
+} \
+_Pragma("GCC diagnostic pop") \
+ret name## _ ##real(args)
+#else /* !CONFIG_X86_MODULE_RERANDOMIZE */
+#define SPECIAL_VAR(x) x
+#define SPECIAL_CONST_VAR(x) x
+#define SPECIAL_FUNCTION_PROTO(ret, name, args...) ret name (args)
+#define SPECIAL_FUNCTION(ret, name, args...) ret name (args)
+#endif /* CONFIG_X86_MODULE_RERANDOMIZE */
+
+extern const char __THUNK_FOR_PLT[];
+extern const unsigned int __THUNK_FOR_PLT_SIZE;
+
+#define PLT_ENTRY_ALIGNMENT	16
+struct plt_entry {
+#ifdef CONFIG_RETPOLINE
+	u8 mov_ins[3];
+	u32 rel_addr;
+	u8 thunk[0];
+#else
+	u16 jmp_ins;
+	u32 rel_addr;
+#endif
+} __packed __aligned(PLT_ENTRY_ALIGNMENT);
+
+struct mod_sec {
+	struct elf64_shdr	*got;
+	struct elf64_shdr	*plt;
+	int			got_num_entries;
+	int			got_max_entries;
+	int			plt_num_entries;
+	int			plt_max_entries;
+};
 
 struct mod_arch_specific {
 #ifdef CONFIG_UNWINDER_ORC
@@ -11,6 +143,10 @@ struct mod_arch_specific {
 	int *orc_unwind_ip;
 	struct orc_entry *orc_unwind;
 #endif
+	struct mod_sec	core;
+	struct mod_sec	rand;
+	struct mod_sec	fixed;
+	struct mod_sec	fixed_rand;
 };
 
 #ifdef CONFIG_X86_64

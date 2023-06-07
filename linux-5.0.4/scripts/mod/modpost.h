@@ -118,6 +118,7 @@ struct module {
 	int skip;
 	int has_init;
 	int has_cleanup;
+	int has_randomize;
 	struct buffer dev_table_buf;
 	char	     srcversion[25];
 	int is_dot_o;

@@ -280,13 +280,14 @@ recompute_jump(struct alt_instr *a, u8 *orig_insn, u8 *repl_insn, u8 *insnbuf)
 	s32 n_dspl, o_dspl;
 	int repl_len;
 
-	if (a->replacementlen != 5)
+	if (a->replacementlen != 5 && !(a->replacementlen == 6
+			&& repl_insn[5] == 0x90)) /* NOP padded */
 		return;
 
 	o_dspl = *(s32 *)(insnbuf + 1);
 
 	/* next_rip of the replacement JMP */
-	next_rip = repl_insn + a->replacementlen;
+	next_rip = repl_insn + 5;
 	/* target rip of the replacement JMP */
 	tgt_rip  = next_rip + o_dspl;
 	n_dspl = tgt_rip - orig_insn;
@@ -311,7 +312,7 @@ two_byte_jmp:
 
 	insnbuf[0] = 0xeb;
 	insnbuf[1] = (s8)n_dspl;
-	add_nops(insnbuf + 2, 3);
+	add_nops(insnbuf + 2, a->replacementlen - 2);
 
 	repl_len = 2;
 	goto done;
@@ -321,6 +322,7 @@ five_byte_jmp:
 
 	insnbuf[0] = 0xe9;
 	*(s32 *)&insnbuf[1] = n_dspl;
+	add_nops(insnbuf + 5, a->replacementlen - 5);
 
 	repl_len = 5;
 
@@ -406,16 +408,28 @@ void __init_or_module noinline apply_alternatives(struct alt_instr *start,
 		insnbuf_sz = a->replacementlen;
 
 		/*
-		 * 0xe8 is a relative jump; fix the offset.
+		 * 0xe8 is a relative CALL, fix the offset;
+		 * also support the NOP padding for relaxed relocations.
+		 *
+		 * 0xff 0x15 and 0xff 0x25 are CALL/JMPs which use
+		 * RIP-relative addresses; fix the offset for them as well.
 		 *
 		 * Instruction length is checked before the opcode to avoid
 		 * accessing uninitialized bytes for zero-length replacements.
 		 */
-		if (a->replacementlen == 5 && *insnbuf == 0xe8) {
+		if ((a->replacementlen == 5 && insnbuf[0] == 0xe8) ||
+			(a->replacementlen == 6 && insnbuf[0] == 0xe8
+                                && insnbuf[5] == 0x90)) { /* NOP padded */
 			*(s32 *)(insnbuf + 1) += replacement - instr;
 			DPRINTK("Fix CALL offset: 0x%x, CALL 0x%lx",
 				*(s32 *)(insnbuf + 1),
 				(unsigned long)instr + *(s32 *)(insnbuf + 1) + 5);
+		} else if (a->replacementlen == 6 && insnbuf[0] == 0xff &&
+				(insnbuf[1] == 0x15 || insnbuf[1] == 0x25)) {
+			*(s32 *)(insnbuf + 2) += replacement - instr;
+			DPRINTK("Fix CALL/JMP(RIP) offset: 0x%x, CALL/JMP(RIP) 0x%lx",
+				*(s32 *)(insnbuf + 2),
+				(unsigned long)instr + *(s32 *)(insnbuf + 2) + 6);
 		}
 
 		if (a->replacementlen && is_jmp(replacement[0]))

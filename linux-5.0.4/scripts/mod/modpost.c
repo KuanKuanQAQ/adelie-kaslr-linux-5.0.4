@@ -699,6 +699,8 @@ static void handle_modversions(struct module *mod, struct elf_info *info,
 			mod->has_init = 1;
 		if (strcmp(symname, "cleanup_module") == 0)
 			mod->has_cleanup = 1;
+		if (strcmp(symname, "randomize_module") == 0)
+			mod->has_randomize = 1;
 		break;
 	}
 }
@@ -2105,6 +2107,8 @@ static int check_exports(struct module *mod)
 	for (s = mod->unres; s; s = s->next) {
 		const char *basename;
 		exp = find_symbol(s->name);
+		if (strstarts(s->name, "__FIXED"))
+			continue;
 		if (!exp || exp->module == mod) {
 			if (have_vmlinux && !s->weak) {
 				if (warn_unresolved) {
@@ -2171,6 +2175,10 @@ static void add_header(struct buffer *b, struct module *mod)
 	if (mod->has_cleanup)
 		buf_printf(b, "#ifdef CONFIG_MODULE_UNLOAD\n"
 			      "\t.exit = cleanup_module,\n"
+			      "#endif\n");
+	if (mod->has_randomize)
+		buf_printf(b, "#ifdef CONFIG_X86_MODULE_RERANDOMIZE\n"
+			      "\t.rerandomize = randomize_module,\n"
 			      "#endif\n");
 	buf_printf(b, "\t.arch = MODULE_ARCH_INIT,\n");
 	buf_printf(b, "};\n");

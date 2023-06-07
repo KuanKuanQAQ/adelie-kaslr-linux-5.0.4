@@ -6,4 +6,4 @@ ccflags-y += -O3
 zstd_compress-y := fse_compress.o huf_compress.o compress.o \
 		   entropy_common.o fse_decompress.o zstd_common.o
 zstd_decompress-y := huf_decompress.o decompress.o \
-		     entropy_common.o fse_decompress.o zstd_common.o
+		     entropy_common_dec.o fse_decompress_dec.o zstd_common_dec.o

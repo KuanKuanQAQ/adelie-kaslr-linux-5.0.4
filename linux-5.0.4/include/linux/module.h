@@ -74,6 +74,9 @@ extern struct module_attribute module_uevent;
 /* These are either module local, or the kernel's dummy ones. */
 extern int init_module(void);
 extern void cleanup_module(void);
+#ifdef CONFIG_X86_MODULE_RERANDOMIZE
+extern void randomize_module(unsigned long);
+#endif
 
 #ifndef MODULE
 /**
@@ -136,6 +139,14 @@ extern void cleanup_module(void);
 	static inline exitcall_t __maybe_unused __exittest(void)		\
 	{ return exitfn; }					\
 	void cleanup_module(void) __copy(exitfn) __attribute__((alias(#exitfn)));
+
+#ifdef CONFIG_X86_MODULE_RERANDOMIZE
+typedef void (*randomizecall_t)(unsigned long);
+#define module_randomize(randomizefn)					\
+	static inline randomizecall_t __maybe_unused __randomizetest(void)		\
+	{ return randomizefn; }					\
+	void randomize_module(unsigned long) __attribute__((alias(#randomizefn)));
+#endif
 
 #endif
 
@@ -317,7 +328,7 @@ struct mod_kallsyms {
 	char *strtab;
 };
 
-#ifdef CONFIG_LIVEPATCH
+#if defined(CONFIG_LIVEPATCH) || defined(CONFIG_X86_MODULE_RERANDOMIZE)
 struct klp_modinfo {
 	Elf_Ehdr hdr;
 	Elf_Shdr *sechdrs;
@@ -393,6 +404,7 @@ struct module {
 	/* Core layout: rbtree is accessed frequently, so keep together. */
 	struct module_layout core_layout __module_layout_align;
 	struct module_layout init_layout;
+	struct module_layout fixed_layout;
 
 	/* Arch-specific module values */
 	struct mod_arch_specific arch;
@@ -455,12 +467,17 @@ struct module {
 	unsigned long *ftrace_callsites;
 #endif
 
-#ifdef CONFIG_LIVEPATCH
+#if defined(CONFIG_LIVEPATCH) || defined(CONFIG_X86_MODULE_RERANDOMIZE)
 	bool klp; /* Is this a livepatch module? */
 	bool klp_alive;
 
 	/* Elf information */
 	struct klp_modinfo *klp_info;
+#endif
+
+#ifdef CONFIG_X86_MODULE_RERANDOMIZE
+	bool randomizable;
+	void (*rerandomize)(unsigned long);
 #endif
 
 #ifdef CONFIG_MODULE_UNLOAD
@@ -659,6 +676,19 @@ static inline bool is_livepatch_module(struct module *mod)
 }
 #endif /* CONFIG_LIVEPATCH */
 
+#ifdef CONFIG_X86_MODULE_RERANDOMIZE
+void update_module_ref(struct module *mod, unsigned long delta);
+static inline bool is_randomizable_module(struct module *mod)
+{
+	return mod->randomizable;
+}
+#else /* !CONFIG_X86_MODULE_RERANDOMIZE */
+static inline bool is_randomizable_module(struct module *mod)
+{
+	return false;
+}
+#endif /* CONFIG_X86_MODULE_RERANDOMIZE */
+
 bool is_module_sig_enforced(void);
 
 #else /* !CONFIG_MODULES... */
@@ -806,11 +836,15 @@ extern void set_all_modules_text_rw(void);
 extern void set_all_modules_text_ro(void);
 extern void module_enable_ro(const struct module *mod, bool after_init);
 extern void module_disable_ro(const struct module *mod);
+extern void module_enable_nx(const struct module *mod);
+extern void module_disable_nx(const struct module *mod);
 #else
 static inline void set_all_modules_text_rw(void) { }
 static inline void set_all_modules_text_ro(void) { }
 static inline void module_enable_ro(const struct module *mod, bool after_init) { }
 static inline void module_disable_ro(const struct module *mod) { }
+void module_enable_nx(const struct module *mod) { }
+void module_disable_nx(const struct module *mod) { }
 #endif
 
 #ifdef CONFIG_GENERIC_BUG

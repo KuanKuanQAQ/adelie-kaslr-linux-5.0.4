@@ -18,6 +18,17 @@
  * they VM-Fail, whereas a successful VM-Enter + VM-Exit will jump
  * to vmx_vmexit.
  */
+#if defined(MODULE) && defined(CONFIG_X86_PIC)
+# define ____kvm_check_rebooting			\
+	pushq %rax;					\
+	movq kvm_rebooting@GOTPCREL(%rip), %rax;	\
+	cmpb $0, (%rax);				\
+	popq %rax
+#else
+# define ____kvm_check_rebooting			\
+	cmpb $0, kvm_rebooting(%rip)
+#endif
+
 ENTRY(vmx_vmenter)
 	/* EFLAGS.ZF is set if VMCS.LAUNCHED == 0 */
 	je 2f
@@ -28,9 +39,9 @@ ENTRY(vmx_vmenter)
 2:	vmlaunch
 	ret
 
-3:	cmpb $0, kvm_rebooting
+3:	____kvm_check_rebooting
 	jne 4f
-	call kvm_spurious_fault
+	_ASM_CALL(kvm_spurious_fault)
 4:	ret
 
 	.pushsection .fixup, "ax"

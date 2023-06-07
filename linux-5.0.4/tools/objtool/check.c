@@ -179,7 +179,7 @@ static int __dead_end_function(struct objtool_file *file, struct symbol *func,
 		return 0;
 
 	insn = find_insn(file, func->sec, func->offset);
-	if (!insn->func)
+	if (!insn || !insn->func)
 		return 0;
 
 	func_for_each_insn_all(file, func, insn) {
@@ -233,6 +233,8 @@ static int __dead_end_function(struct objtool_file *file, struct symbol *func,
 
 static int dead_end_function(struct objtool_file *file, struct symbol *func)
 {
+	if (!func)
+		return 0;
 	return __dead_end_function(file, func, 0);
 }
 
@@ -581,7 +583,7 @@ static int add_call_destinations(struct objtool_file *file)
 	struct rela *rela;
 
 	for_each_insn(file, insn) {
-		if (insn->type != INSN_CALL)
+		if (insn->type != INSN_CALL && insn->type != INSN_CALL_DYNAMIC)
 			continue;
 
 		rela = find_rela_by_dest_range(insn->sec, insn->offset,
@@ -590,8 +592,8 @@ static int add_call_destinations(struct objtool_file *file)
 			dest_off = insn->offset + insn->len + insn->immediate;
 			insn->call_dest = find_symbol_by_offset(insn->sec,
 								dest_off);
-
-			if (!insn->call_dest && !insn->ignore) {
+			if (!insn->call_dest && !insn->ignore &&
+			    insn->type != INSN_CALL_DYNAMIC) {
 				WARN_FUNC("unsupported intra-function call",
 					  insn->sec, insn->offset);
 				if (retpoline)
@@ -602,8 +604,9 @@ static int add_call_destinations(struct objtool_file *file)
 		} else if (rela->sym->type == STT_SECTION) {
 			insn->call_dest = find_symbol_by_offset(rela->sym->sec,
 								rela->addend+4);
-			if (!insn->call_dest ||
-			    insn->call_dest->type != STT_FUNC) {
+			if ((!insn->call_dest ||
+			     insn->call_dest->type != STT_FUNC) &&
+			    insn->type != INSN_CALL_DYNAMIC) {
 				WARN_FUNC("can't find call dest symbol at %s+0x%x",
 					  insn->sec, insn->offset,
 					  rela->sym->sec->name,
@@ -835,6 +838,12 @@ static int add_switch_table(struct objtool_file *file, struct instruction *insn,
 	struct alternative *alt;
 	struct symbol *pfunc = insn->func->pfunc;
 	unsigned int prev_offset = 0;
+
+	/* If PC32 relocations are used (as in PIC), the following logic
+	 * can be broken in many ways.
+	 */
+	if (file->ignore_unreachables)
+		return 0;
 
 	list_for_each_entry_from(rela, &table->rela_sec->rela_list, list) {
 		if (rela == next_table)
@@ -1272,7 +1281,7 @@ static int decode_sections(struct objtool_file *file)
 
 static bool is_fentry_call(struct instruction *insn)
 {
-	if (insn->type == INSN_CALL &&
+	if (insn->call_dest &&
 	    insn->call_dest->type == STT_NOTYPE &&
 	    !strcmp(insn->call_dest->name, "__fentry__"))
 		return true;
@@ -1917,6 +1926,7 @@ static int validate_branch(struct objtool_file *file, struct instruction *first,
 			return 0;
 
 		case INSN_CALL:
+		case INSN_CALL_DYNAMIC:
 			if (is_fentry_call(insn))
 				break;
 
@@ -1926,8 +1936,6 @@ static int validate_branch(struct objtool_file *file, struct instruction *first,
 			if (ret == -1)
 				return 1;
 
-			/* fallthrough */
-		case INSN_CALL_DYNAMIC:
 			if (!no_fp && func && !has_valid_stack_frame(&state)) {
 				WARN_FUNC("call without frame pointer save/setup",
 					  sec, insn->offset);
@@ -1957,12 +1965,15 @@ static int validate_branch(struct objtool_file *file, struct instruction *first,
 			break;
 
 		case INSN_JUMP_DYNAMIC:
+			/* XXX: Does not work properly with PIC code. */
+#if 0
 			if (func && list_empty(&insn->alts) &&
 			    has_modified_stack_frame(&state)) {
 				WARN_FUNC("sibling call from callable instruction with modified stack frame",
 					  sec, insn->offset);
 				return 1;
 			}
+#endif
 
 			return 0;
 
@@ -2043,6 +2054,11 @@ static int validate_retpoline(struct objtool_file *file)
 		if (!strcmp(insn->sec->name, ".init.text") && !module)
 			continue;
 
+		/* ignore ftrace calls in PIC code */
+		if (!insn->call_dest ||
+		    !strcmp(insn->call_dest->name, "__fentry__"))
+			continue;
+
 		WARN_FUNC("indirect %s found in RETPOLINE build",
 			  insn->sec, insn->offset,
 			  insn->type == INSN_JUMP_DYNAMIC ? "jump" : "call");
@@ -2055,13 +2071,15 @@ static int validate_retpoline(struct objtool_file *file)
 
 static bool is_kasan_insn(struct instruction *insn)
 {
-	return (insn->type == INSN_CALL &&
+	return ((insn->type == INSN_CALL || insn->type == INSN_CALL_DYNAMIC) &&
+		insn->call_dest &&
 		!strcmp(insn->call_dest->name, "__asan_handle_no_return"));
 }
 
 static bool is_ubsan_insn(struct instruction *insn)
 {
-	return (insn->type == INSN_CALL &&
+	return ((insn->type == INSN_CALL || insn->type == INSN_CALL_DYNAMIC) &&
+		insn->call_dest &&
 		!strcmp(insn->call_dest->name,
 			"__ubsan_handle_builtin_unreachable"));
 }

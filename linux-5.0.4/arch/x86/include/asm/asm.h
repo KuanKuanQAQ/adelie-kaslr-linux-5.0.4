@@ -2,6 +2,48 @@
 #ifndef _ASM_X86_ASM_H
 #define _ASM_X86_ASM_H
 
+/*
+ * PIC modules require an indirection through GOT for
+ * external symbols. _ASM_CALL/_ASM_JMP for internal functions
+ * is optimized by replacing indirect calls with direct ones
+ * followed by 1-byte NOP paddings per a call site;
+ * Similarly, _ASM_LEA is optimized by replacing MOV
+ * to LEA and is used to load symbol addresses on x86-64.
+ * If RETPOLINE is enabled, use PLT stubs instead to
+ * avoid overheads for local calls.
+ */
+#if defined(MODULE) && defined(CONFIG_X86_PIC)
+# ifdef __ASSEMBLY__
+#  define _ASM_LEA(v,r,a)	movq v##@GOTPCREL(##r##), a
+#  ifdef CONFIG_RETPOLINE
+#   define _ASM_CALL(f)		call f##@PLT
+#   define _ASM_JMP(f)		jmp f##@PLT
+#  else
+#   define _ASM_CALL(f)		call *##f##@GOTPCREL(%rip)
+#   define _ASM_JMP(f)		jmp *##f##@GOTPCREL(%rip)
+#  endif
+# else
+#  define _ASM_LEA(v,r,a)	"movq " #v "@GOTPCREL(" #r "), " #a
+#  ifdef CONFIG_RETPOLINE
+#   define _ASM_CALL(f)		"call " #f "@PLT"
+#   define _ASM_JMP(f)		"jmp " #f "@PLT"
+#  else
+#   define _ASM_CALL(f)		"call *" #f "@GOTPCREL(%%rip)"
+#   define _ASM_JMP(f)		"jmp *" #f "@GOTPCREL(%%rip)"
+#  endif
+# endif
+#else
+# ifdef __ASSEMBLY__
+#  define _ASM_CALL(f)		call f
+#  define _ASM_JMP(f)		jmp f
+#  define _ASM_LEA(v,r,a)	leaq v##(##r##), a
+# else
+#  define _ASM_CALL(f)		"call " #f
+#  define _ASM_JMP(f)		"jmp " #f
+#  define _ASM_LEA(v,r,a)	"leaq " #v "(" #r "), " #a
+# endif
+#endif
+
 #ifdef __ASSEMBLY__
 # define __ASM_FORM(x)	x
 # define __ASM_FORM_RAW(x)     x
@@ -30,6 +72,7 @@
 #define _ASM_ALIGN	__ASM_SEL(.balign 4, .balign 8)
 
 #define _ASM_MOV	__ASM_SIZE(mov)
+#define _ASM_MOVABS	__ASM_SEL(movl, movabsq)
 #define _ASM_INC	__ASM_SIZE(inc)
 #define _ASM_DEC	__ASM_SIZE(dec)
 #define _ASM_ADD	__ASM_SIZE(add)
@@ -117,6 +160,25 @@
 # define CC_OUT(c) [_cc_ ## c] "=qm"
 #endif
 
+/*
+ * PLT relocations in x86_64 PIC modules are already relative.
+ * However, due to inconsistent GNU binutils behavior (e.g., i386),
+ * avoid PLT relocations in all other cases (binutils bug 23997).
+ */
+#if defined(MODULE) && defined(CONFIG_X86_PIC)
+# ifdef __ASSEMBLY__
+#  define _ASM_HANDLER(x)	x##@PLT
+# else
+#  define _ASM_HANDLER(x)	x "@PLT"
+# endif
+#else
+# ifdef __ASSEMBLY__
+#  define _ASM_HANDLER(x)	(x) - .
+# else
+#  define _ASM_HANDLER(x)	"(" x ") - ."
+# endif
+#endif
+
 /* Exception table entry */
 #ifdef __ASSEMBLY__
 # define _ASM_EXTABLE_HANDLE(from, to, handler)			\
@@ -124,7 +186,7 @@
 	.balign 4 ;						\
 	.long (from) - . ;					\
 	.long (to) - . ;					\
-	.long (handler) - . ;					\
+	.long _ASM_HANDLER(handler);				\
 	.popsection
 
 # define _ASM_EXTABLE(from, to)					\
@@ -173,13 +235,13 @@
 	.endm
 
 #else
-# define _EXPAND_EXTABLE_HANDLE(x) #x
+# define _EXPAND_EXTABLE_HANDLE(x) _ASM_HANDLER(#x)
 # define _ASM_EXTABLE_HANDLE(from, to, handler)			\
 	" .pushsection \"__ex_table\",\"a\"\n"			\
 	" .balign 4\n"						\
 	" .long (" #from ") - .\n"				\
 	" .long (" #to ") - .\n"				\
-	" .long (" _EXPAND_EXTABLE_HANDLE(handler) ") - .\n"	\
+	" .long " _EXPAND_EXTABLE_HANDLE(handler) "\n"		\
 	" .popsection\n"
 
 # define _ASM_EXTABLE(from, to)					\

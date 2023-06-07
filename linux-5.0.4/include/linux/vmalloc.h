@@ -206,4 +206,12 @@ pcpu_free_vm_areas(struct vm_struct **vms, int nr_vms)
 int register_vmap_purge_notifier(struct notifier_block *nb);
 int unregister_vmap_purge_notifier(struct notifier_block *nb);
 
+void *remap_module(unsigned long addr, unsigned long size,
+		unsigned long new_phy_addr, unsigned long new_phy_size,
+		unsigned long align, unsigned long start, unsigned long end,
+		gfp_t gfp_mask, pgprot_t prot, unsigned long vm_flags,
+		int node, const void *caller);
+
+void unmap_module(const void *addr, const void *, unsigned long);
+
 #endif /* _LINUX_VMALLOC_H */

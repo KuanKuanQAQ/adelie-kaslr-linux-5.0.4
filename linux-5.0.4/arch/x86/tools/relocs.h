@@ -17,6 +17,14 @@
 #include <regex.h>
 #include <tools/le_byteshift.h>
 
+#ifndef R_X86_64_REX_GOTPCRELX
+	#define R_X86_64_REX_GOTPCRELX	42
+#endif
+
+#ifndef R_X86_64_GOTPCRELX
+	#define R_X86_64_GOTPCRELX	41
+#endif
+
 void die(char *fmt, ...) __attribute__((noreturn));
 
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
@@ -31,8 +39,8 @@ enum symtype {
 
 void process_32(FILE *fp, int use_real_mode, int as_text,
 		int show_absolute_syms, int show_absolute_relocs,
-		int show_reloc_info);
+		int show_reloc_info, int use_large_reloc);
 void process_64(FILE *fp, int use_real_mode, int as_text,
 		int show_absolute_syms, int show_absolute_relocs,
-		int show_reloc_info);
+		int show_reloc_info, int use_large_reloc);
 #endif /* RELOCS_H */

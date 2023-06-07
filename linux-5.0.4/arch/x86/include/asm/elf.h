@@ -64,6 +64,10 @@ typedef struct user_fxsr_struct elf_fpxregset_t;
 #define R_X86_64_8		14	/* Direct 8 bit sign extended  */
 #define R_X86_64_PC8		15	/* 8 bit sign extended pc relative */
 #define R_X86_64_PC64		24	/* Place relative 64-bit signed */
+#define R_X86_64_GOTOFF64	25
+#define R_X86_64_GOTPC32	26
+#define R_X86_64_GOTPCRELX	41	/* Relaxed R_X86_64_GOTPCREL */
+#define R_X86_64_REX_GOTPCRELX	42	/* ... with the REX prefix */
 
 /*
  * These are used to set parameters in the core dumps.

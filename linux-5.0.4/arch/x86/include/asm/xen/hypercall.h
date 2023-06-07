@@ -88,9 +88,25 @@ struct xen_dm_op_buf;
 
 extern struct { char _entry[32]; } hypercall_page[];
 
-#define __HYPERCALL		"call hypercall_page+%c[offset]"
-#define __HYPERCALL_ENTRY(x)						\
+#if defined(MODULE) && defined(CONFIG_X86_PIC)
+# define HYPERCALL(x)		long xen_hypercall_##x(void);
+# include <asm/xen-hypercalls.h>
+# undef HYPERCALL
+# ifdef CONFIG_RETPOLINE
+#  include <asm/nospec-branch.h>
+#  define __HYPERCALL		CALL_NOSPEC
+#  define __HYPERCALL_ENTRY(x)						\
+	[thunk_target] "a" (xen_hypercall_##x)
+# else
+#  define __HYPERCALL		"call *%p[name]@GOTPCREL(%%rip)"
+#  define __HYPERCALL_ENTRY(x)						\
+	[name] "X" (xen_hypercall_##x)
+# endif
+#else
+# define __HYPERCALL		"call hypercall_page+%c[offset]"
+# define __HYPERCALL_ENTRY(x)						\
 	[offset] "i" (__HYPERVISOR_##x * sizeof(hypercall_page[0]))
+#endif
 
 #ifdef CONFIG_X86_32
 #define __HYPERCALL_RETREG	"eax"

@@ -741,7 +741,7 @@ bool __raw_callee_save___native_vcpu_is_preempted(long cpu);
 	    PV_THUNK_NAME(func) ":"					\
 	    FRAME_BEGIN							\
 	    PV_SAVE_ALL_CALLER_REGS					\
-	    "call " #func ";"						\
+	    _ASM_CALL(func) ";"						\
 	    PV_RESTORE_ALL_CALLER_REGS					\
 	    FRAME_END							\
 	    "ret;"							\

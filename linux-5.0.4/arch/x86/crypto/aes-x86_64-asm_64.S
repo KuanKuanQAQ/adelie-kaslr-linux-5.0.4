@@ -17,6 +17,7 @@
 
 #include <linux/linkage.h>
 #include <asm/asm-offsets.h>
+#include <asm/asm.h>
 
 #define R1	%rax
 #define R1E	%eax
@@ -48,8 +49,34 @@
 #define R10	%r10
 #define R11	%r11
 
-#define prologue(FUNC,KEY,B128,B192,r1,r2,r5,r6,r7,r8,r9,r10,r11) \
+/* Hold global for PIE/PIC support */
+#define RBASE	%r12
+
+#if defined(CONFIG_X86_PIE) || (defined(MODULE) && defined(CONFIG_X86_PIC))
+# define rbase_save			\
+	pushq   RBASE;
+# define rbase_restore			\
+	popq    RBASE;
+# define rbase_load(tab)		\
+	_ASM_LEA(tab, %rip, RBASE);
+# define round_mov(tab, tab_off, reg_i, reg_o)	\
+	movl    tab_off(RBASE,reg_i,4), reg_o;
+# define round_xor(tab, tab_off, reg_i, reg_o)	\
+	xorl    tab_off(RBASE,reg_i,4), reg_o;
+#else
+# define rbase_save
+# define rbase_restore
+# define rbase_load(tab)
+# define round_mov(tab, tab_off, reg_i, reg_o)	\
+	movl    tab+tab_off(,reg_i,4), reg_o;
+# define round_xor(tab, tab_off, reg_i, reg_o)	\
+	xorl    tab+tab_off(,reg_i,4), reg_o;
+#endif
+
+#define prologue(FUNC,KEY,B128,B192,TAB,r1,r2,r5,r6,r7,r8,r9,r10,r11) \
 	ENTRY(FUNC);			\
+	rbase_save			\
+	rbase_load(TAB)			\
 	movq	r1,r2;			\
 	leaq	KEY+48(r8),r9;		\
 	movq	r10,r11;		\
@@ -74,61 +101,62 @@
 	movl	r6 ## E,4(r9);		\
 	movl	r7 ## E,8(r9);		\
 	movl	r8 ## E,12(r9);		\
+	rbase_restore			\
 	ret;				\
 	ENDPROC(FUNC);
 
 #define round(TAB,OFFSET,r1,r2,r3,r4,r5,r6,r7,r8,ra,rb,rc,rd) \
 	movzbl	r2 ## H,r5 ## E;	\
 	movzbl	r2 ## L,r6 ## E;	\
-	movl	TAB+1024(,r5,4),r5 ## E;\
+	round_mov(TAB, 1024, r5, r5 ## E)\
 	movw	r4 ## X,r2 ## X;	\
-	movl	TAB(,r6,4),r6 ## E;	\
+	round_mov(TAB, 0, r6, r6 ## E)	\
 	roll	$16,r2 ## E;		\
 	shrl	$16,r4 ## E;		\
 	movzbl	r4 ## L,r7 ## E;	\
 	movzbl	r4 ## H,r4 ## E;	\
 	xorl	OFFSET(r8),ra ## E;	\
 	xorl	OFFSET+4(r8),rb ## E;	\
-	xorl	TAB+3072(,r4,4),r5 ## E;\
-	xorl	TAB+2048(,r7,4),r6 ## E;\
+	round_xor(TAB, 3072, r4, r5 ## E)\
+	round_xor(TAB, 2048, r7, r6 ## E)\
 	movzbl	r1 ## L,r7 ## E;	\
 	movzbl	r1 ## H,r4 ## E;	\
-	movl	TAB+1024(,r4,4),r4 ## E;\
+	round_mov(TAB, 1024, r4, r4 ## E)\
 	movw	r3 ## X,r1 ## X;	\
 	roll	$16,r1 ## E;		\
 	shrl	$16,r3 ## E;		\
-	xorl	TAB(,r7,4),r5 ## E;	\
+	round_xor(TAB, 0, r7, r5 ## E)	\
 	movzbl	r3 ## L,r7 ## E;	\
 	movzbl	r3 ## H,r3 ## E;	\
-	xorl	TAB+3072(,r3,4),r4 ## E;\
-	xorl	TAB+2048(,r7,4),r5 ## E;\
+	round_xor(TAB, 3072, r3, r4 ## E)\
+	round_xor(TAB, 2048, r7, r5 ## E)\
 	movzbl	r1 ## L,r7 ## E;	\
 	movzbl	r1 ## H,r3 ## E;	\
 	shrl	$16,r1 ## E;		\
-	xorl	TAB+3072(,r3,4),r6 ## E;\
-	movl	TAB+2048(,r7,4),r3 ## E;\
+	round_xor(TAB, 3072, r3, r6 ## E)\
+	round_mov(TAB, 2048, r7, r3 ## E)\
 	movzbl	r1 ## L,r7 ## E;	\
 	movzbl	r1 ## H,r1 ## E;	\
-	xorl	TAB+1024(,r1,4),r6 ## E;\
-	xorl	TAB(,r7,4),r3 ## E;	\
+	round_xor(TAB, 1024, r1, r6 ## E)\
+	round_xor(TAB, 0, r7, r3 ## E)	\
 	movzbl	r2 ## H,r1 ## E;	\
 	movzbl	r2 ## L,r7 ## E;	\
 	shrl	$16,r2 ## E;		\
-	xorl	TAB+3072(,r1,4),r3 ## E;\
-	xorl	TAB+2048(,r7,4),r4 ## E;\
+	round_xor(TAB, 3072, r1, r3 ## E)\
+	round_xor(TAB, 2048, r7, r4 ## E)\
 	movzbl	r2 ## H,r1 ## E;	\
 	movzbl	r2 ## L,r2 ## E;	\
 	xorl	OFFSET+8(r8),rc ## E;	\
 	xorl	OFFSET+12(r8),rd ## E;	\
-	xorl	TAB+1024(,r1,4),r3 ## E;\
-	xorl	TAB(,r2,4),r4 ## E;
+	round_xor(TAB, 1024, r1, r3 ## E)\
+	round_xor(TAB, 0, r2, r4 ## E)
 
 #define move_regs(r1,r2,r3,r4) \
 	movl	r3 ## E,r1 ## E;	\
 	movl	r4 ## E,r2 ## E;
 
-#define entry(FUNC,KEY,B128,B192) \
-	prologue(FUNC,KEY,B128,B192,R2,R8,R1,R3,R4,R6,R10,R5,R11)
+#define entry(FUNC,KEY,B128,B192,TAB) \
+	prologue(FUNC,KEY,B128,B192,TAB,R2,R8,R1,R3,R4,R6,R10,R5,R11)
 
 #define return(FUNC) epilogue(FUNC,R8,R2,R5,R6,R3,R4,R11)
 
@@ -148,7 +176,7 @@
 
 /* void aes_enc_blk(stuct crypto_tfm *tfm, u8 *out, const u8 *in) */
 
-	entry(aes_enc_blk,0,.Le128,.Le192)
+	entry(aes_enc_blk,0,.Le128,.Le192,crypto_ft_tab)
 	encrypt_round(crypto_ft_tab,-96)
 	encrypt_round(crypto_ft_tab,-80)
 .Le192:	encrypt_round(crypto_ft_tab,-64)
@@ -162,12 +190,13 @@
 	encrypt_round(crypto_ft_tab, 64)
 	encrypt_round(crypto_ft_tab, 80)
 	encrypt_round(crypto_ft_tab, 96)
+	rbase_load(crypto_fl_tab)
 	encrypt_final(crypto_fl_tab,112)
 	return(aes_enc_blk)
 
 /* void aes_dec_blk(struct crypto_tfm *tfm, u8 *out, const u8 *in) */
 
-	entry(aes_dec_blk,240,.Ld128,.Ld192)
+	entry(aes_dec_blk,240,.Ld128,.Ld192,crypto_it_tab)
 	decrypt_round(crypto_it_tab,-96)
 	decrypt_round(crypto_it_tab,-80)
 .Ld192:	decrypt_round(crypto_it_tab,-64)
@@ -181,5 +210,6 @@
 	decrypt_round(crypto_it_tab, 64)
 	decrypt_round(crypto_it_tab, 80)
 	decrypt_round(crypto_it_tab, 96)
+	rbase_load(crypto_il_tab)
 	decrypt_final(crypto_il_tab,112)
 	return(aes_dec_blk)

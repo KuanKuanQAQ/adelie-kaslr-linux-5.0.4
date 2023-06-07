@@ -18,6 +18,15 @@
  *
  * Licensed under the GNU General Public License, version 2 (GPLv2).
  */
+
+#ifndef R_X86_64_REX_GOTPCRELX
+	#define R_X86_64_REX_GOTPCRELX	42
+#endif
+
+#ifndef R_X86_64_GOTPCRELX
+	#define R_X86_64_GOTPCRELX	41
+#endif
+
 #undef append_func
 #undef is_fake_mcount
 #undef fn_is_fake_mcount

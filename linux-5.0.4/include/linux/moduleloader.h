@@ -19,6 +19,10 @@ int module_frob_arch_sections(Elf_Ehdr *hdr,
 			      char *secstrings,
 			      struct module *mod);
 
+int module_arch_preinit(struct module *mod);
+bool module_is_fixed_section(struct module *mod, unsigned int shnum);
+bool module_is_fixed_section_name(const char *sname);
+
 /* Additional bytes needed by arch in front of individual sections */
 unsigned int arch_mod_section_prepend(struct module *mod, unsigned int section);
 

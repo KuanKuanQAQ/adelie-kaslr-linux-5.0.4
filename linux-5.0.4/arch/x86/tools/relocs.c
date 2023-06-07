@@ -13,8 +13,14 @@
 
 static Elf_Ehdr ehdr;
 
+#if ELF_BITS == 64
+typedef uint64_t rel_off_t;
+#else
+typedef uint32_t rel_off_t;
+#endif
+
 struct relocs {
-	uint32_t	*offset;
+	rel_off_t	*offset;
 	unsigned long	count;
 	unsigned long	size;
 };
@@ -32,6 +38,7 @@ struct section {
 	Elf_Sym        *symtab;
 	Elf_Rel        *reltab;
 	char           *strtab;
+	Elf_Addr       *got;
 };
 static struct section *secs;
 
@@ -205,6 +212,8 @@ static const char *rel_type(unsigned type)
 		REL_TYPE(R_X86_64_JUMP_SLOT),
 		REL_TYPE(R_X86_64_RELATIVE),
 		REL_TYPE(R_X86_64_GOTPCREL),
+		REL_TYPE(R_X86_64_REX_GOTPCRELX),
+		REL_TYPE(R_X86_64_GOTPCRELX),
 		REL_TYPE(R_X86_64_32),
 		REL_TYPE(R_X86_64_32S),
 		REL_TYPE(R_X86_64_16),
@@ -294,6 +303,36 @@ static Elf_Sym *sym_lookup(const char *symname)
 	}
 	return 0;
 }
+
+static Elf_Sym *sym_lookup_addr(Elf_Addr addr, const char **name)
+{
+	int i;
+
+	for (i = 0; i < ehdr.e_shnum; i++) {
+		struct section *sec = &secs[i];
+		long nsyms;
+		Elf_Sym *symtab;
+		Elf_Sym *sym;
+
+		if (sec->shdr.sh_type != SHT_SYMTAB)
+			continue;
+
+		nsyms = sec->shdr.sh_size/sizeof(Elf_Sym);
+		symtab = sec->symtab;
+
+		for (sym = symtab; --nsyms >= 0; sym++) {
+			if (sym->st_value == addr) {
+				if (name) {
+					*name = sym_name(sec->link->strtab,
+							 sym);
+				}
+				return sym;
+			}
+		}
+	}
+	return 0;
+}
+
 
 #if BYTE_ORDER == LITTLE_ENDIAN
 #define le16_to_cpu(val) (val)
@@ -515,6 +554,35 @@ static void read_relocs(FILE *fp)
 	}
 }
 
+static void read_got(FILE *fp)
+{
+	int i;
+
+	for (i = 0; i < ehdr.e_shnum; i++) {
+		struct section *sec = &secs[i];
+
+		sec->got = NULL;
+		if (sec->shdr.sh_type != SHT_PROGBITS ||
+		    strcmp(sec_name(i), ".got")) {
+			continue;
+		}
+		sec->got = malloc(sec->shdr.sh_size);
+		if (!sec->got) {
+			die("malloc of %d bytes for got failed\n",
+				sec->shdr.sh_size);
+		}
+		if (fseek(fp, sec->shdr.sh_offset, SEEK_SET) < 0) {
+			die("Seek to %d failed: %s\n",
+				sec->shdr.sh_offset, strerror(errno));
+		}
+		if (fread(sec->got, 1, sec->shdr.sh_size, fp)
+		    != sec->shdr.sh_size) {
+			die("Cannot read got: %s\n",
+				strerror(errno));
+		}
+	}
+}
+
 
 static void print_absolute_symbols(void)
 {
@@ -630,7 +698,7 @@ static void print_absolute_relocs(void)
 		printf("\n");
 }
 
-static void add_reloc(struct relocs *r, uint32_t offset)
+static void add_reloc(struct relocs *r, rel_off_t offset)
 {
 	if (r->count == r->size) {
 		unsigned long newsize = r->size + 50000;
@@ -643,6 +711,32 @@ static void add_reloc(struct relocs *r, uint32_t offset)
 		r->size = newsize;
 	}
 	r->offset[r->count++] = offset;
+}
+
+/*
+ * The linker does not generate relocations for the GOT for the kernel.
+ * If a GOT is found, simulate the relocations that should have been included.
+ */
+static void walk_got_table(int (*process)(struct section *sec, Elf_Rel *rel,
+					  Elf_Sym *sym, const char *symname),
+			   struct section *sec)
+{
+	int i;
+	Elf_Addr entry;
+	Elf_Sym *sym;
+	const char *symname;
+	Elf_Rel rel;
+
+	for (i = 0; i < sec->shdr.sh_size/sizeof(Elf_Addr); i++) {
+		entry = sec->got[i];
+		sym = sym_lookup_addr(entry, &symname);
+		if (!sym)
+			die("Could not found got symbol for entry %d\n", i);
+		rel.r_offset = sec->shdr.sh_addr + i * sizeof(Elf_Addr);
+		rel.r_info = ELF_BITS == 64 ? R_X86_64_GLOB_DAT
+			     : R_386_GLOB_DAT;
+		process(sec, &rel, sym, symname);
+	}
 }
 
 static void walk_relocs(int (*process)(struct section *sec, Elf_Rel *rel,
@@ -658,6 +752,8 @@ static void walk_relocs(int (*process)(struct section *sec, Elf_Rel *rel,
 		struct section *sec = &secs[i];
 
 		if (sec->shdr.sh_type != SHT_REL_TYPE) {
+			if (sec->got)
+				walk_got_table(process, sec);
 			continue;
 		}
 		sec_symtab  = sec->link;
@@ -749,6 +845,16 @@ static int is_percpu_sym(ElfW(Sym) *sym, const char *symname)
 		strncmp(symname, "init_per_cpu_", 13);
 }
 
+/*
+ * Check if the 32-bit relocation is within the xenpvh 32-bit code.
+ * If so, ignores it.
+ */
+static int is_in_xenpvh_assembly(Elf_Addr offset)
+{
+	Elf_Sym *sym = sym_lookup("pvh_start_xen");
+	return sym && (offset >= sym->st_value) &&
+		(offset < (sym->st_value + sym->st_size));
+}
 
 static int do_reloc64(struct section *sec, Elf_Rel *rel, ElfW(Sym) *sym,
 		      const char *symname)
@@ -767,6 +873,9 @@ static int do_reloc64(struct section *sec, Elf_Rel *rel, ElfW(Sym) *sym,
 		offset += per_cpu_load_addr;
 
 	switch (r_type) {
+	case R_X86_64_REX_GOTPCRELX:
+	case R_X86_64_GOTPCRELX:
+	case R_X86_64_GOTPCREL:
 	case R_X86_64_NONE:
 		/* NONE can be ignored. */
 		break;
@@ -820,13 +929,21 @@ static int do_reloc64(struct section *sec, Elf_Rel *rel, ElfW(Sym) *sym,
 		 * the relocations are processed.
 		 * Make sure that the offset will fit.
 		 */
-		if ((int32_t)offset != (int64_t)offset)
+		if (r_type != R_X86_64_64 &&
+		    (int32_t)offset != (int64_t)offset) {
+			if (is_in_xenpvh_assembly(offset))
+				break;
 			die("Relocation offset doesn't fit in 32 bits\n");
+		}
 
 		if (r_type == R_X86_64_64)
 			add_reloc(&relocs64, offset);
 		else
 			add_reloc(&relocs32, offset);
+		break;
+
+	case R_X86_64_GLOB_DAT:
+		add_reloc(&relocs64, offset);
 		break;
 
 	default:
@@ -968,25 +1085,48 @@ static void sort_relocs(struct relocs *r)
 	qsort(r->offset, r->count, sizeof(r->offset[0]), cmp_relocs);
 }
 
-static int write32(uint32_t v, FILE *f)
+static int write32(rel_off_t rel, FILE *f)
 {
-	unsigned char buf[4];
+	unsigned char buf[sizeof(uint32_t)];
+	uint32_t v = (uint32_t)rel;
 
 	put_unaligned_le32(v, buf);
-	return fwrite(buf, 1, 4, f) == 4 ? 0 : -1;
+	return fwrite(buf, 1, sizeof(buf), f) == sizeof(buf) ? 0 : -1;
 }
 
-static int write32_as_text(uint32_t v, FILE *f)
+static int write32_as_text(rel_off_t rel, FILE *f)
 {
+	uint32_t v = (uint32_t)rel;
 	return fprintf(f, "\t.long 0x%08"PRIx32"\n", v) > 0 ? 0 : -1;
 }
 
-static void emit_relocs(int as_text, int use_real_mode)
+static int write64(rel_off_t rel, FILE *f)
+{
+	unsigned char buf[sizeof(uint64_t)];
+	uint64_t v = (uint64_t)rel;
+
+	put_unaligned_le64(v, buf);
+	return fwrite(buf, 1, sizeof(buf), f) == sizeof(buf) ? 0 : -1;
+}
+
+static int write64_as_text(rel_off_t rel, FILE *f)
+{
+	uint64_t v = (uint64_t)rel;
+
+	return fprintf(f, "\t.quad 0x%016"PRIx64"\n", v) > 0 ? 0 : -1;
+}
+
+static void emit_relocs(int as_text, int use_real_mode, int use_large_reloc)
 {
 	int i;
-	int (*write_reloc)(uint32_t, FILE *) = write32;
+	int (*write_reloc)(rel_off_t rel, FILE *f);
 	int (*do_reloc)(struct section *sec, Elf_Rel *rel, Elf_Sym *sym,
 			const char *symname);
+
+	if (use_large_reloc)
+		write_reloc = write64;
+	else
+		write_reloc = write32;
 
 #if ELF_BITS == 64
 	if (!use_real_mode)
@@ -998,6 +1138,9 @@ static void emit_relocs(int as_text, int use_real_mode)
 		do_reloc = do_reloc32;
 	else
 		do_reloc = do_reloc_real;
+
+	/* Large relocations only for 64-bit */
+	use_large_reloc = 0;
 #endif
 
 	/* Collect up the relocations */
@@ -1021,8 +1164,13 @@ static void emit_relocs(int as_text, int use_real_mode)
 		 * gas will like.
 		 */
 		printf(".section \".data.reloc\",\"a\"\n");
-		printf(".balign 4\n");
-		write_reloc = write32_as_text;
+		if (use_large_reloc) {
+			printf(".balign 8\n");
+			write_reloc = write64_as_text;
+		} else {
+			printf(".balign 4\n");
+			write_reloc = write32_as_text;
+		}
 	}
 
 	if (use_real_mode) {
@@ -1090,7 +1238,7 @@ static void print_reloc_info(void)
 
 void process(FILE *fp, int use_real_mode, int as_text,
 	     int show_absolute_syms, int show_absolute_relocs,
-	     int show_reloc_info)
+	     int show_reloc_info, int use_large_reloc)
 {
 	regex_init(use_real_mode);
 	read_ehdr(fp);
@@ -1098,6 +1246,7 @@ void process(FILE *fp, int use_real_mode, int as_text,
 	read_strtabs(fp);
 	read_symtabs(fp);
 	read_relocs(fp);
+	read_got(fp);
 	if (ELF_BITS == 64)
 		percpu_init();
 	if (show_absolute_syms) {
@@ -1112,5 +1261,5 @@ void process(FILE *fp, int use_real_mode, int as_text,
 		print_reloc_info();
 		return;
 	}
-	emit_relocs(as_text, use_real_mode);
+	emit_relocs(as_text, use_real_mode, use_large_reloc);
 }
