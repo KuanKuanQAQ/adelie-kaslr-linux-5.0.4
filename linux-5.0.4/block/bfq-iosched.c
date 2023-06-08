@@ -140,6 +140,15 @@
 #include "bfq-iosched.h"
 #include "blk-wbt.h"
 
+#ifndef SPECIAL_VAR
+/* These are for IDE */
+#define SPECIAL_VAR(x) x
+#define SPECIAL_CONST_VAR(x) x
+#define SPECIAL_FUNCTION_PROTO(ret, name, args...) ret name (args)
+#define SPECIAL_FUNCTION(ret, name, args...) ret name (args)
+#error "Could not find wrappers"
+#endif
+
 MODULE_INFO(randomizable, "Y");
 
 #define BFQ_BFQQ_FNS(name)						\
@@ -5787,11 +5796,12 @@ static struct elevator_type iosched_bfq_mq = {
 };
 MODULE_ALIAS("bfq-iosched");
 
-char bfq_driver_name[] = "bfq";
-void bfq_test_func(char *name) {
+SPECIAL_VAR(char bfq_driver_name[]) = "bfq";
+SPECIAL_FUNCTION_PROTO(void, bfq_test_func, char *name);
+SPECIAL_FUNCTION(void, bfq_test_func, char *name) {
 	printk("From bfq_test_func: ");
 	printk("Module Name: %s \n", name);
-    // printk("Real Function Address: %px\n", &bfq_test_func_real);
+    printk("Real Function Address: %px\n", &bfq_test_func_real);
     printk("Wrap Function Address: %px\n", &bfq_test_func);
 	return;
 }
@@ -5801,9 +5811,12 @@ extern void init_rerandom_driver(char *name, void(*test_func)(char *));
 static int __init bfq_init(void)
 {
 	int ret;
+	printk("**************************************");
+	printk("**Its about to init rerandom driver.**");
+	printk("**************************************");
 	init_rerandom_driver(bfq_driver_name, bfq_test_func);
 #ifdef CONFIG_BFQ_GROUP_IOSCHED
-	ret = blkcg_policy_register(&blkcg_policy_bfq);
+	ret = blkcg_policy_register(&blkcg_policy_bfq); // register
 	if (ret)
 		return ret;
 #endif
@@ -5828,7 +5841,7 @@ static int __init bfq_init(void)
 	ref_wr_duration[0] = msecs_to_jiffies(7000); /* actually 8 sec */
 	ref_wr_duration[1] = msecs_to_jiffies(2500); /* actually 3 sec */
 
-	ret = elv_register(&iosched_bfq_mq);
+	ret = elv_register(&iosched_bfq_mq); // register
 	if (ret)
 		goto slab_kill;
 

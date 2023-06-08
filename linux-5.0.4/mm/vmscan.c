@@ -4058,12 +4058,15 @@ EXPORT_SYMBOL_GPL(init_rerandom_driver);
 static int my_kthread(void *p)
 {
 	time64_t time = ktime_get_seconds();
-	printk("My kthread: kthread started");
+	printk("My kthread: kthread started.");
 	for ( ; ; ) {
 		msleep(1000);
 		/* Periodically print the statistics */
 		if (time < ktime_get_seconds()) {
 			time = ktime_get_seconds() + 5;
+			printk("************************");
+			printk("**Jump into test func.**");
+			printk("************************");
 			rerandom_driver.test_func(rerandom_driver.name);
 		    printk("Out Function Address: %px\n", rerandom_driver.test_func);
 		}
