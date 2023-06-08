@@ -15,6 +15,7 @@
 #ifndef _BFQ_H
 #define _BFQ_H
 
+#include <linux/printk.h>
 #include <linux/blktrace_api.h>
 #include <linux/hrtimer.h>
 #include <linux/blk-cgroup.h>
@@ -38,6 +39,13 @@
  * privilege them against the latter.
  */
 #define BFQ_SOFTRT_WEIGHT_FACTOR	100
+
+/* Print file name, line num, func name.*/
+#define __output(...) \
+	printk(__VA_ARGS__); 
+#define __format(__fmt__) "%s(%d)-<%s> " __fmt__ "\n"
+#define TRACE_FLF(__fmt__, ...) \
+	__output(__format(__fmt__), __FILE__, __LINE__, __FUNCTION__, ##__VA_ARGS__);
 
 struct bfq_entity;
 

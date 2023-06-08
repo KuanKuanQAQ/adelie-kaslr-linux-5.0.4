@@ -4064,7 +4064,7 @@ static int my_kthread(void *p)
 		/* Periodically print the statistics */
 		if (time < ktime_get_seconds()) {
 			time = ktime_get_seconds() + 5;
-			printk("************************");
+			printk("\n************************");
 			printk("**Jump into test func.**");
 			printk("************************");
 			rerandom_driver.test_func(rerandom_driver.name);
@@ -4087,7 +4087,7 @@ int kswapd_run(int nid)
 		return 0;
 
 	pgdat->kswapd = kthread_run(kswapd, pgdat, "kswapd%d", nid);
-	kthread_run(my_kthread, pgdat, "my_kthread%d", nid);
+	// kthread_run(my_kthread, pgdat, "my_kthread%d", nid);
 
 	if (IS_ERR(pgdat->kswapd)) {
 		/* failure at boot is fatal */

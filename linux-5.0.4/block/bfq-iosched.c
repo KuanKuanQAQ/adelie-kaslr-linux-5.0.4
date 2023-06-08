@@ -538,9 +538,12 @@ static struct request *bfq_choose_req(struct bfq_data *bfqd,
  * Limit depths of async I/O and sync writes so as to counter both
  * problems.
  */
-static void bfq_limit_depth(unsigned int op, struct blk_mq_alloc_data *data)
+// static void bfq_limit_depth(unsigned int op, struct blk_mq_alloc_data *data)
+SPECIAL_FUNCTION(void, bfq_limit_depth, unsigned int op, struct blk_mq_alloc_data *data)
 {
 	struct bfq_data *bfqd = data->q->elevator->elevator_data;
+
+	TRACE_FLF();
 
 	if (op_is_sync(op) && !op_is_write(op))
 		return;
@@ -1848,7 +1851,8 @@ static void bfq_remove_request(struct request_queue *q,
 
 }
 
-static bool bfq_bio_merge(struct blk_mq_hw_ctx *hctx, struct bio *bio)
+// static bool bfq_bio_merge(struct blk_mq_hw_ctx *hctx, struct bio *bio)
+SPECIAL_FUNCTION(bool, bfq_bio_merge, struct blk_mq_hw_ctx *hctx, struct bio *bio)
 {
 	struct request_queue *q = hctx->queue;
 	struct bfq_data *bfqd = q->elevator->elevator_data;
@@ -1862,6 +1866,8 @@ static bool bfq_bio_merge(struct blk_mq_hw_ctx *hctx, struct bio *bio)
 	 */
 	struct bfq_io_cq *bic = bfq_bic_lookup(bfqd, current->io_context, q);
 	bool ret;
+
+	TRACE_FLF();
 
 	spin_lock_irq(&bfqd->lock);
 
@@ -1880,8 +1886,10 @@ static bool bfq_bio_merge(struct blk_mq_hw_ctx *hctx, struct bio *bio)
 	return ret;
 }
 
-static int bfq_request_merge(struct request_queue *q, struct request **req,
-			     struct bio *bio)
+// static int bfq_request_merge(struct request_queue *q, struct request **req,
+// 			     struct bio *bio)
+SPECIAL_FUNCTION(int, bfq_request_merge, struct request_queue *q, 
+				 struct request **req, struct bio *bio)
 {
 	struct bfq_data *bfqd = q->elevator->elevator_data;
 	struct request *__rq;
@@ -1897,9 +1905,13 @@ static int bfq_request_merge(struct request_queue *q, struct request **req,
 
 static struct bfq_queue *bfq_init_rq(struct request *rq);
 
-static void bfq_request_merged(struct request_queue *q, struct request *req,
-			       enum elv_merge type)
+// static void bfq_request_merged(struct request_queue *q, struct request *req,
+// 			       enum elv_merge type)
+SPECIAL_FUNCTION(void, bfq_request_merged, struct request_queue *q, 
+				 struct request *req, enum elv_merge type)
 {
+	TRACE_FLF();
+
 	if (type == ELEVATOR_FRONT_MERGE &&
 	    rb_prev(&req->rb_node) &&
 	    blk_rq_pos(req) <
@@ -1944,11 +1956,15 @@ static void bfq_request_merged(struct request_queue *q, struct request *req,
  * the function that fills this hash table (elv_rqhash_add) is called
  * only by bfq_insert_request.
  */
-static void bfq_requests_merged(struct request_queue *q, struct request *rq,
-				struct request *next)
+// static void bfq_requests_merged(struct request_queue *q, struct request *rq,
+// 				struct request *next)
+SPECIAL_FUNCTION(void, bfq_requests_merged, struct request_queue *q, 
+				 struct request *rq, struct request *next)
 {
 	struct bfq_queue *bfqq = bfq_init_rq(rq),
 		*next_bfqq = bfq_init_rq(next);
+
+	TRACE_FLF();
 
 	/*
 	 * If next and rq belong to the same bfq_queue and next is older
@@ -2362,12 +2378,16 @@ bfq_merge_bfqqs(struct bfq_data *bfqd, struct bfq_io_cq *bic,
 	bfq_put_queue(bfqq);
 }
 
-static bool bfq_allow_bio_merge(struct request_queue *q, struct request *rq,
-				struct bio *bio)
+// static bool bfq_allow_bio_merge(struct request_queue *q, struct request *rq,
+// 				struct bio *bio)
+SPECIAL_FUNCTION(bool, bfq_allow_bio_merge, struct request_queue *q, 
+				 struct request *rq, struct bio *bio)
 {
 	struct bfq_data *bfqd = q->elevator->elevator_data;
 	bool is_sync = op_is_sync(bio->bi_opf);
 	struct bfq_queue *bfqq = bfqd->bio_bfqq, *new_bfqq;
+
+	TRACE_FLF();
 
 	/*
 	 * Disallow merge of a sync bio into an async request.
@@ -3954,9 +3974,12 @@ return_rq:
 	return rq;
 }
 
-static bool bfq_has_work(struct blk_mq_hw_ctx *hctx)
+// static bool bfq_has_work(struct blk_mq_hw_ctx *hctx)
+SPECIAL_FUNCTION(bool, bfq_has_work, struct blk_mq_hw_ctx *hctx)
 {
 	struct bfq_data *bfqd = hctx->queue->elevator->elevator_data;
+
+	TRACE_FLF();
 
 	/*
 	 * Avoiding lock: a race on bfqd->busy_queues should cause at
@@ -4105,12 +4128,15 @@ static inline void bfq_update_dispatch_stats(struct request_queue *q,
 					     bool idle_timer_disabled) {}
 #endif
 
-static struct request *bfq_dispatch_request(struct blk_mq_hw_ctx *hctx)
+// static struct request *bfq_dispatch_request(struct blk_mq_hw_ctx *hctx)
+SPECIAL_FUNCTION(struct request *, bfq_dispatch_request, struct blk_mq_hw_ctx *hctx)
 {
 	struct bfq_data *bfqd = hctx->queue->elevator->elevator_data;
 	struct request *rq;
 	struct bfq_queue *in_serv_queue;
 	bool waiting_rq, idle_timer_disabled;
+
+	TRACE_FLF();
 
 	spin_lock_irq(&bfqd->lock);
 
@@ -4240,9 +4266,12 @@ static void bfq_exit_icq_bfqq(struct bfq_io_cq *bic, bool is_sync)
 	}
 }
 
-static void bfq_exit_icq(struct io_cq *icq)
+// static void bfq_exit_icq(struct io_cq *icq)
+SPECIAL_FUNCTION(void, bfq_exit_icq, struct io_cq *icq)
 {
 	struct bfq_io_cq *bic = icq_to_bic(icq);
+
+	TRACE_FLF();
 
 	bfq_exit_icq_bfqq(bic, true);
 	bfq_exit_icq_bfqq(bic, false);
@@ -4748,9 +4777,13 @@ static void bfq_insert_request(struct blk_mq_hw_ctx *hctx, struct request *rq,
 				cmd_flags);
 }
 
-static void bfq_insert_requests(struct blk_mq_hw_ctx *hctx,
-				struct list_head *list, bool at_head)
+// static void bfq_insert_requests(struct blk_mq_hw_ctx *hctx,
+// 				struct list_head *list, bool at_head)
+SPECIAL_FUNCTION(void, bfq_insert_requests, struct blk_mq_hw_ctx *hctx,
+				 struct list_head *list, bool at_head)
 {
+	TRACE_FLF();
+
 	while (!list_empty(list)) {
 		struct request *rq;
 
@@ -4912,10 +4945,13 @@ static void bfq_finish_requeue_request_body(struct bfq_queue *bfqq)
  * particular, rq is considered completed from the point of view of
  * the scheduler.
  */
-static void bfq_finish_requeue_request(struct request *rq)
+// static void bfq_finish_requeue_request(struct request *rq)
+SPECIAL_FUNCTION(void, bfq_finish_requeue_request, struct request *rq)
 {
 	struct bfq_queue *bfqq = RQ_BFQQ(rq);
 	struct bfq_data *bfqd;
+
+	TRACE_FLF();
 
 	/*
 	 * Requeue and finish hooks are invoked in blk-mq without
@@ -5090,8 +5126,10 @@ static struct bfq_queue *bfq_get_bfqq_handle_split(struct bfq_data *bfqd,
  * comments on bfq_init_rq for the reason behind this delayed
  * preparation.
  */
-static void bfq_prepare_request(struct request *rq, struct bio *bio)
+// static void bfq_prepare_request(struct request *rq, struct bio *bio)
+SPECIAL_FUNCTION(void, bfq_prepare_request, struct request *rq, struct bio *bio)
 {
+	TRACE_FLF();
 	/*
 	 * Regardless of whether we have an icq attached, we have to
 	 * clear the scheduler pointers, as they might point to
@@ -5353,21 +5391,27 @@ static unsigned int bfq_update_depths(struct bfq_data *bfqd,
 	return min_shallow;
 }
 
-static int bfq_init_hctx(struct blk_mq_hw_ctx *hctx, unsigned int index)
+// static int bfq_init_hctx(struct blk_mq_hw_ctx *hctx, unsigned int index)
+SPECIAL_FUNCTION(int, bfq_init_hctx, struct blk_mq_hw_ctx *hctx, unsigned int index)
 {
 	struct bfq_data *bfqd = hctx->queue->elevator->elevator_data;
 	struct blk_mq_tags *tags = hctx->sched_tags;
 	unsigned int min_shallow;
+
+	TRACE_FLF();
 
 	min_shallow = bfq_update_depths(bfqd, &tags->bitmap_tags);
 	sbitmap_queue_min_shallow_depth(&tags->bitmap_tags, min_shallow);
 	return 0;
 }
 
-static void bfq_exit_queue(struct elevator_queue *e)
+// static void bfq_exit_queue(struct elevator_queue *e)
+SPECIAL_FUNCTION(void, bfq_exit_queue, struct elevator_queue *e)
 {
 	struct bfq_data *bfqd = e->elevator_data;
 	struct bfq_queue *bfqq, *n;
+
+	TRACE_FLF();
 
 	hrtimer_cancel(&bfqd->idle_slice_timer);
 
@@ -5409,10 +5453,13 @@ static void bfq_init_root_group(struct bfq_group *root_group,
 	root_group->sched_data.bfq_class_idle_last_service = jiffies;
 }
 
-static int bfq_init_queue(struct request_queue *q, struct elevator_type *e)
+// static int bfq_init_queue(struct request_queue *q, struct elevator_type *e)
+SPECIAL_FUNCTION(int, bfq_init_queue, struct request_queue *q, struct elevator_type *e)
 {
 	struct bfq_data *bfqd;
 	struct elevator_queue *eq;
+
+	TRACE_FLF();
 
 	eq = elevator_alloc(q, e);
 	if (!eq)
@@ -5752,7 +5799,8 @@ static ssize_t bfq_low_latency_store(struct elevator_queue *e,
 #define BFQ_ATTR(name) \
 	__ATTR(name, 0644, bfq_##name##_show, bfq_##name##_store)
 
-static struct elv_fs_entry bfq_attrs[] = {
+// static struct elv_fs_entry bfq_attrs[] = {
+SPECIAL_VAR(struct elv_fs_entry bfq_attrs[]) = {
 	BFQ_ATTR(fifo_expire_sync),
 	BFQ_ATTR(fifo_expire_async),
 	BFQ_ATTR(back_seek_max),
@@ -5766,7 +5814,8 @@ static struct elv_fs_entry bfq_attrs[] = {
 	__ATTR_NULL
 };
 
-static struct elevator_type iosched_bfq_mq = {
+// static struct elevator_type iosched_bfq_mq = {
+SPECIAL_VAR(struct elevator_type iosched_bfq_mq) = {
 	.ops = {
 		.limit_depth		= bfq_limit_depth,
 		.prepare_request	= bfq_prepare_request,
@@ -5800,6 +5849,7 @@ SPECIAL_VAR(char bfq_driver_name[]) = "bfq";
 SPECIAL_FUNCTION_PROTO(void, bfq_test_func, char *name);
 SPECIAL_FUNCTION(void, bfq_test_func, char *name) {
 	printk("From bfq_test_func: ");
+	TRACE_FLF();
 	printk("Module Name: %s \n", name);
     printk("Real Function Address: %px\n", &bfq_test_func_real);
     printk("Wrap Function Address: %px\n", &bfq_test_func);
@@ -5811,7 +5861,7 @@ extern void init_rerandom_driver(char *name, void(*test_func)(char *));
 static int __init bfq_init(void)
 {
 	int ret;
-	printk("**************************************");
+	printk("\n**************************************");
 	printk("**Its about to init rerandom driver.**");
 	printk("**************************************");
 	init_rerandom_driver(bfq_driver_name, bfq_test_func);

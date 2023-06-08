@@ -26,6 +26,15 @@
 
 #if defined(CONFIG_BFQ_GROUP_IOSCHED) &&  defined(CONFIG_DEBUG_BLK_CGROUP)
 
+#ifndef SPECIAL_VAR
+/* These are for IDE to provide auto-completion. */
+#define SPECIAL_VAR(x) x
+#define SPECIAL_CONST_VAR(x) x
+#define SPECIAL_FUNCTION_PROTO(ret, name, args...) ret name (args)
+#define SPECIAL_FUNCTION(ret, name, args...) ret name (args)
+#error "Could not find wrappers"
+#endif
+
 /* bfqg stats flags */
 enum bfqg_stats_flags {
 	BFQG_stats_waiting = 0,
@@ -411,9 +420,12 @@ static struct bfq_group_data *blkcg_to_bfqgd(struct blkcg *blkcg)
 	return cpd_to_bfqgd(blkcg_to_cpd(blkcg, &blkcg_policy_bfq));
 }
 
-static struct blkcg_policy_data *bfq_cpd_alloc(gfp_t gfp)
+// static struct blkcg_policy_data *bfq_cpd_alloc(gfp_t gfp)
+SPECIAL_FUNCTION(struct blkcg_policy_data *, bfq_cpd_alloc, gfp_t gfp)
 {
 	struct bfq_group_data *bgd;
+
+	TRACE_FLF();
 
 	bgd = kzalloc(sizeof(*bgd), gfp);
 	if (!bgd)
@@ -421,23 +433,31 @@ static struct blkcg_policy_data *bfq_cpd_alloc(gfp_t gfp)
 	return &bgd->pd;
 }
 
-static void bfq_cpd_init(struct blkcg_policy_data *cpd)
+// static void bfq_cpd_init(struct blkcg_policy_data *cpd)
+SPECIAL_FUNCTION(void, bfq_cpd_init, struct blkcg_policy_data *cpd)
 {
 	struct bfq_group_data *d = cpd_to_bfqgd(cpd);
+
+	TRACE_FLF();
 
 	d->weight = cgroup_subsys_on_dfl(io_cgrp_subsys) ?
 		CGROUP_WEIGHT_DFL : BFQ_WEIGHT_LEGACY_DFL;
 }
 
-static void bfq_cpd_free(struct blkcg_policy_data *cpd)
+// static void bfq_cpd_free(struct blkcg_policy_data *cpd)
+SPECIAL_FUNCTION(void, bfq_cpd_free, struct blkcg_policy_data *cpd)
 {
+	TRACE_FLF();
 	kfree(cpd_to_bfqgd(cpd));
 }
 
-static struct blkg_policy_data *bfq_pd_alloc(gfp_t gfp, int node)
+// static struct blkg_policy_data *bfq_pd_alloc(gfp_t gfp, int node)
+SPECIAL_FUNCTION(struct blkg_policy_data *, bfq_pd_alloc, gfp_t gfp, int node)
 {
 	struct bfq_group *bfqg;
 
+	TRACE_FLF();
+	
 	bfqg = kzalloc_node(sizeof(*bfqg), gfp, node);
 	if (!bfqg)
 		return NULL;
@@ -452,13 +472,16 @@ static struct blkg_policy_data *bfq_pd_alloc(gfp_t gfp, int node)
 	return &bfqg->pd;
 }
 
-static void bfq_pd_init(struct blkg_policy_data *pd)
+// static void bfq_pd_init(struct blkg_policy_data *pd)
+SPECIAL_FUNCTION(void, bfq_pd_init, struct blkg_policy_data *pd)
 {
 	struct blkcg_gq *blkg = pd_to_blkg(pd);
 	struct bfq_group *bfqg = blkg_to_bfqg(blkg);
 	struct bfq_data *bfqd = blkg->q->elevator->elevator_data;
 	struct bfq_entity *entity = &bfqg->entity;
 	struct bfq_group_data *d = blkcg_to_bfqgd(blkg->blkcg);
+
+	TRACE_FLF();
 
 	entity->orig_weight = entity->weight = entity->new_weight = d->weight;
 	entity->my_sched_data = &bfqg->sched_data;
@@ -471,17 +494,23 @@ static void bfq_pd_init(struct blkg_policy_data *pd)
 	bfqg->rq_pos_tree = RB_ROOT;
 }
 
-static void bfq_pd_free(struct blkg_policy_data *pd)
+// static void bfq_pd_free(struct blkg_policy_data *pd)
+SPECIAL_FUNCTION(void, bfq_pd_free, struct blkg_policy_data *pd)
 {
 	struct bfq_group *bfqg = pd_to_bfqg(pd);
+
+	TRACE_FLF();
 
 	bfqg_stats_exit(&bfqg->stats);
 	bfqg_put(bfqg);
 }
 
-static void bfq_pd_reset_stats(struct blkg_policy_data *pd)
+// static void bfq_pd_reset_stats(struct blkg_policy_data *pd)
+SPECIAL_FUNCTION(void, bfq_pd_reset_stats, struct blkg_policy_data *pd)
 {
 	struct bfq_group *bfqg = pd_to_bfqg(pd);
+
+	TRACE_FLF();
 
 	bfqg_stats_reset(&bfqg->stats);
 }
@@ -766,7 +795,8 @@ static void bfq_reparent_active_entities(struct bfq_data *bfqd,
  * blkio already grabs the queue_lock for us, so no need to use
  * RCU-based magic
  */
-static void bfq_pd_offline(struct blkg_policy_data *pd)
+// static void bfq_pd_offline(struct blkg_policy_data *pd)
+SPECIAL_FUNCTION(void, bfq_pd_offline, struct blkg_policy_data *pd)
 {
 	struct bfq_service_tree *st;
 	struct bfq_group *bfqg = pd_to_bfqg(pd);
@@ -774,6 +804,8 @@ static void bfq_pd_offline(struct blkg_policy_data *pd)
 	struct bfq_entity *entity = bfqg->my_entity;
 	unsigned long flags;
 	int i;
+
+	TRACE_FLF();
 
 	spin_lock_irqsave(&bfqd->lock, flags);
 
@@ -1035,23 +1067,25 @@ struct bfq_group *bfq_create_group_hierarchy(struct bfq_data *bfqd, int node)
 	return blkg_to_bfqg(bfqd->queue->root_blkg);
 }
 
-struct blkcg_policy blkcg_policy_bfq = {
+// struct blkcg_policy blkcg_policy_bfq = {
+SPECIAL_VAR(struct blkcg_policy blkcg_policy_bfq) = {
 	.dfl_cftypes		= bfq_blkg_files,
 	.legacy_cftypes		= bfq_blkcg_legacy_files,
 
 	.cpd_alloc_fn		= bfq_cpd_alloc,
 	.cpd_init_fn		= bfq_cpd_init,
-	.cpd_bind_fn	        = bfq_cpd_init,
+	.cpd_bind_fn	    = bfq_cpd_init,
 	.cpd_free_fn		= bfq_cpd_free,
 
 	.pd_alloc_fn		= bfq_pd_alloc,
-	.pd_init_fn		= bfq_pd_init,
+	.pd_init_fn		    = bfq_pd_init,
 	.pd_offline_fn		= bfq_pd_offline,
-	.pd_free_fn		= bfq_pd_free,
+	.pd_free_fn		    = bfq_pd_free,
 	.pd_reset_stats_fn	= bfq_pd_reset_stats,
 };
 
-struct cftype bfq_blkcg_legacy_files[] = {
+// struct cftype bfq_blkcg_legacy_files[] = {
+SPECIAL_VAR(struct cftype bfq_blkcg_legacy_files[]) = {
 	{
 		.name = "bfq.weight",
 		.flags = CFTYPE_NOT_ON_ROOT,
@@ -1171,7 +1205,8 @@ struct cftype bfq_blkcg_legacy_files[] = {
 	{ }	/* terminate */
 };
 
-struct cftype bfq_blkg_files[] = {
+// struct cftype bfq_blkg_files[] = {
+SPECIAL_VAR(struct cftype bfq_blkg_files[]) = {
 	{
 		.name = "bfq.weight",
 		.flags = CFTYPE_NOT_ON_ROOT,
