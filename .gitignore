@@ -7,3 +7,7 @@ _*
 *.img
 .vscode/
 .DS_Store
+*.ko
+in.txt
+rootfs/initramfs/lib/modules/5.0.4-KASLR/*.ko
+rootfs/initramfs.cpio.gz

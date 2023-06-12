@@ -4040,13 +4040,14 @@ static int kswapd_cpu_online(unsigned int cpu)
 #include <linux/delay.h>
 
 char default_name[] = "default_name";
-void empty_func(char *c) {
+void empty_func(void) {
 	printk("This is an empty func.");
 	return;
 }
 struct Rerandom_Driver rerandom_driver = {
 	.name       = default_name,
-	.test_func  = empty_func,
+	.init_entry = &empty_func,
+	.check_entry  = &empty_func,
 };
 
 void init_rerandom_driver(char *name, void(*test_func)(char *)) {
@@ -4055,19 +4056,31 @@ void init_rerandom_driver(char *name, void(*test_func)(char *)) {
 }
 EXPORT_SYMBOL_GPL(init_rerandom_driver);
 
+void register_rerandom_driver(struct Rerandom_Driver* driver) {
+	rerandom_driver.name = driver->name;
+	rerandom_driver.init_entry = driver->init_entry;
+	rerandom_driver.check_entry = driver->check_entry;
+}
+EXPORT_SYMBOL_GPL(register_rerandom_driver);
+
 static int my_kthread(void *p)
 {
 	time64_t time = ktime_get_seconds();
 	printk("My kthread: kthread started.");
 	for ( ; ; ) {
-		msleep(1000);
+		msleep(5000);
 		/* Periodically print the statistics */
 		if (time < ktime_get_seconds()) {
 			time = ktime_get_seconds() + 5;
 			printk("\n************************");
 			printk("**Jump into test func.**");
 			printk("************************");
-			rerandom_driver.test_func(rerandom_driver.name);
+			printk("** start init_entry %lx check_entry %lx rerandom_driver %lx **", 
+				rerandom_driver.init_entry, rerandom_driver.check_entry, &rerandom_driver);
+			rerandom_driver.init_entry();
+			printk("** start check_entry %lx **", rerandom_driver.check_entry);
+			rerandom_driver.check_entry();
+			//rerandom_driver.test_func(rerandom_driver.name);
 		    printk("Out Function Address: %px\n", rerandom_driver.test_func);
 		}
 	}
@@ -4083,19 +4096,20 @@ int kswapd_run(int nid)
 	pg_data_t *pgdat = NODE_DATA(nid);
 	int ret = 0;
 
-	if (pgdat->kswapd)
-		return 0;
+	printk("Run kswapd_run nid %d", nid);
+	kthread_run(my_kthread, pgdat, "my_kthread%d", nid);
 
-	pgdat->kswapd = kthread_run(kswapd, pgdat, "kswapd%d", nid);
-	// kthread_run(my_kthread, pgdat, "my_kthread%d", nid);
+	//if (pgdat->kswapd)
+	//	return 0;
 
-	if (IS_ERR(pgdat->kswapd)) {
-		/* failure at boot is fatal */
-		BUG_ON(system_state < SYSTEM_RUNNING);
-		pr_err("Failed to start kswapd on node %d\n", nid);
-		ret = PTR_ERR(pgdat->kswapd);
-		pgdat->kswapd = NULL;
-	}
+	//pgdat->kswapd = kthread_run(kswapd, pgdat, "kswapd%d", nid);
+	//if (IS_ERR(pgdat->kswapd)) {
+	//	/* failure at boot is fatal */
+	//	BUG_ON(system_state < SYSTEM_RUNNING);
+	//	pr_err("Failed to start kswapd on node %d\n", nid);
+	//	ret = PTR_ERR(pgdat->kswapd);
+	//	pgdat->kswapd = NULL;
+	//}
 	return ret;
 }
 
@@ -4115,6 +4129,7 @@ void kswapd_stop(int nid)
 
 static int __init kswapd_init(void)
 {
+
 	int nid, ret;
 
 	swap_setup();
