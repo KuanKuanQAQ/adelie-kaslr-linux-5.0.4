@@ -23,7 +23,7 @@ struct e1000_stats {
 				sizeof(((struct net_device *)0)->m), \
 				offsetof(struct net_device, m)
 
-SPECIAL_CONST_VAR(const struct e1000_stats e1000_gstrings_stats[]) = {
+static const struct e1000_stats e1000_gstrings_stats[] = {
 	{ "rx_packets", E1000_STAT(stats.gprc) },
 	{ "tx_packets", E1000_STAT(stats.gptc) },
 	{ "rx_bytes", E1000_STAT(stats.gorcl) },
@@ -75,7 +75,7 @@ SPECIAL_CONST_VAR(const struct e1000_stats e1000_gstrings_stats[]) = {
 #define E1000_QUEUE_STATS_LEN 0
 #define E1000_GLOBAL_STATS_LEN ARRAY_SIZE(e1000_gstrings_stats)
 #define E1000_STATS_LEN (E1000_GLOBAL_STATS_LEN + E1000_QUEUE_STATS_LEN)
-SPECIAL_CONST_VAR(const char e1000_gstrings_test[][ETH_GSTRING_LEN]) = {
+static const char e1000_gstrings_test[][ETH_GSTRING_LEN] = {
 	"Register test  (offline)", "Eeprom test    (offline)",
 	"Interrupt test (offline)", "Loopback test  (offline)",
 	"Link test   (on/offline)"
@@ -811,7 +811,7 @@ static int e1000_eeprom_test(struct e1000_adapter *adapter, u64 *data)
 	return *data;
 }
 
-SPECIAL_FUNCTION(irqreturn_t, e1000_test_intr, int irq, void *data)
+static irqreturn_t e1000_test_intr(int irq, void *data)
 {
 	struct net_device *netdev = (struct net_device *)data;
 	struct e1000_adapter *adapter = netdev_priv(netdev);
@@ -1853,7 +1853,7 @@ static void e1000_get_strings(struct net_device *netdev, u32 stringset,
 	}
 }
 
-SPECIAL_CONST_VAR(const struct ethtool_ops e1000_ethtool_ops) = {
+static const struct ethtool_ops e1000_ethtool_ops = {
 	.get_drvinfo		= e1000_get_drvinfo,
 	.get_regs_len		= e1000_get_regs_len,
 	.get_regs		= e1000_get_regs,
