@@ -38,6 +38,7 @@ static bool is_node_decl_in_module(tree node) {
     return false;
 }
 
+// 怎么判断这个函数是被外部调用的？
 // Return true if gimple is both a call statement and the call is to a function defined outside the module
 static bool is_call_to_fn_outside_module(gimple stmt) {
     return is_gimple_call(stmt) && gimple_call_fndecl(stmt) && !is_node_decl_in_module(gimple_call_fndecl(stmt));
@@ -154,31 +155,43 @@ static void fix_relocations_finish_decl(void *event_data, void *user_data) {
 	}
 }
 
-
 static void do_execute() {
     basic_block bb;
     gimple_stmt_iterator gsi;
 
+    // 获取当前函数的指针
     const char *current_function_name = DECL_NAME_POINTER(current_function_decl);
 
+    // 该函数应该是每次函数调用的时候分析
     DEBUG_OUTPUT("Analyzing function: %s\n", current_function_name);
 
+    // 用来迭代当前函数的每个基本块
     FOR_EACH_BB_FN(bb, cfun)
     {
+        // 使用gsi_start_bb函数初始化一个`gimple_stmt_iterator类型的迭代器，然后进行遍历
         for (gsi = gsi_start_bb(bb); !gsi_end_p(gsi); gsi_next(&gsi)) {
 
+            // 获取迭代器当前执行的gimple语句 
             gimple stmt = gsi_stmt(gsi);
 
+            // 查看当前gimple语句是否是对模块外定义的函数调用，怎么确定这个函数是外部调用的
             // Look for calls made to functions defined outside of module
             if (is_call_to_fn_outside_module(stmt)) {
 
+                //DEBUG_OUTPUT("fn_outside_module: %s\n", stmt);
+
                     // Iterate over each of the call's arguments to see if they contain pointers to string constants that need to be wrapped
                     size_t i;
+                    // 迭代这个函数调用的参数，查看它们是否包含指向需要封装的字符串常亮的指针
                     for (i = 0; i < gimple_call_num_args(stmt); i++) {
                         tree call_arg = gimple_call_arg(stmt, i);
 
                         // Replace call args that are string constants with variable in .fixed.rodata section instead
+                        // 如果参数是字符串常亮，则将其替换为在`.fixed.rodata`节中的变量，
+                        // 调用了build_string_var_decl函数来创建字符串变量
+                        // 并使用gimple_call_set_arg函数来替换原变量
                         if (is_call_arg_a_string_constant(call_arg)) {
+                        //    DEBUG_OUTPUT("fn_arg_string_constant: %s\n", call_arg);
                             const_tree str_tree = get_str_cst(call_arg);
                             if (str_tree) {
                                 const char *str = TREE_STRING_POINTER(str_tree);
@@ -204,9 +217,9 @@ static unsigned int fix_relocations_instrument_execute(void) {
 }
 
 
-#define PASS_NAME fix_relocations_instrument
 #define NO_GATE
-
+#undef NO_EXECUTE
+#define PASS_NAME fix_relocations_instrument
 #include "gcc-generate-gimple-pass.h"
 
 
@@ -215,20 +228,24 @@ plugin_init(struct plugin_name_args *plugin_info,
             struct plugin_gcc_version *version) {
 
     const char *const plugin_name = plugin_info->base_name;
+
     PASS_INFO(fix_relocations_instrument, "optimized", 1, PASS_POS_INSERT_BEFORE);
 
     if (!plugin_default_version_check(version, &gcc_version)) {
         error(G_("incompatible gcc/plugin versions"));
         return 1;
     }
+    // 输出插件信息
     register_callback(plugin_name, PLUGIN_INFO, NULL,
-                      &fix_relocations_plugin_info);
+                      &fix_relocations_plugin_info); // 插件的名称、版本、作者等信息
 
+    // 没有看懂
     register_callback(plugin_name, PLUGIN_FINISH_DECL,
-                      fix_relocations_finish_decl, NULL);
+                      fix_relocations_finish_decl, NULL); // 插件最后的清理操作
 
+    // 定一个了一个pass，感觉好像就是识别了出来，没有做什么操作
     register_callback(plugin_name, PLUGIN_PASS_MANAGER_SETUP, NULL,
-                      &fix_relocations_instrument_pass_info);
+                      &fix_relocations_instrument_pass_info); // 配置GCC的pass管理器，
 
     return 0;
 }

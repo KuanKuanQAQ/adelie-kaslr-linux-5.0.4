@@ -26,11 +26,14 @@ static int generated_str_counter = 0;
 #define PRINT_DEBUG 1
 
 #define OUTPUT(filename, str, args...) \
+    if(PRINT_DEBUG) {fprintf(stderr, str, args);} \
+    /*
     if(PRINT_DEBUG) { \
     	FILE *out_file = fopen(debug_filename(filename), "a");   \
     	fprintf(out_file, str, args);  \
 		fclose(out_file); \
     } \
+    */
 	
 #define DEBUG_OUTPUT(str, args...) OUTPUT("all-debug.txt", str, args)
 #define OUTPUT_WRAPPED_FUNCTION(str, args...) OUTPUT("wrapped-functions.txt", str, args)
@@ -186,13 +189,19 @@ bool str_equals(const char *str1, const char *str2)
 /* Determine whether the definition of node is contained within module */
 /* This seems like rough way to do this, but didn't see an alternative, and this seems to be kind of like what other plugins have done. */
 static bool is_node_decl_in_module(tree node) {
+    DEBUG_OUTPUT("For each bn start %d\n", __LINE__);
     if (DECL_BUILT_IN(node)) { //if (DECL_BUILT_IN_CLASS(node) != BUILT_IN_NORMAL) {
         return false;
     }
-    else if (node && DECL_SOURCE_LOCATION(node)) {
+    else if (node && DECL_SOURCE_LOCATION(node) <= INT_MAX) {
+    DEBUG_OUTPUT("For each bn start %d\n", __LINE__);
+    location_t l_t = DECL_SOURCE_LOCATION(node);
+    DEBUG_OUTPUT("For each bn start %d %llx %llx\n", __LINE__, l_t, INT_MAX);
         expanded_location xloc = expand_location(DECL_SOURCE_LOCATION(node));
+        DEBUG_OUTPUT("For each bn start %d\n", __LINE__);
         return !(starts_with("./", xloc.file));
     }
+    DEBUG_OUTPUT("For each bn start %d\n", __LINE__);
     return false;
 }
 
@@ -240,7 +249,7 @@ tree build_wrapper_function(tree fndecl) {
 		 fprintf(stderr, "INLINE function: %s\n", get_name(fndecl));
 		 return NULL_TREE;
 	}
-	fprintf(stderr,"Building wrapper for function: %s\n", get_name(fndecl));
+	fprintf(stderr, "Building wrapper for function: %s\n", get_name(fndecl));
 	
     OUTPUT_WRAPPED_FUNCTION("%s\n", get_name(fndecl));
    
@@ -308,11 +317,12 @@ tree build_wrapper_function(tree fndecl) {
     change_decl_assembler_name(clone2->decl, get_real_function_tree(fndecl));
 
 	
-    fprintf(stderr,"DONE: Building wrapper for function: %s\n", get_name(fndecl));
+    fprintf(stderr, "DONE: Building wrapper for function: %s\n", get_name(fndecl));
     return clone2->decl;
 }
 
 static void mark_function_for_wrap(tree t, gimple stmt, int i, tree replace) {
+    DEBUG_OUTPUT("For each bn start %d\n", __LINE__);
 	const char * current_function_name = DECL_NAME_POINTER(t);
 	if (str_equals(current_function_name, "randomize_module") 
 			|| str_equals(current_function_name, "e1000e_rerandomize") 
@@ -320,8 +330,10 @@ static void mark_function_for_wrap(tree t, gimple stmt, int i, tree replace) {
 		return;
 	}
 	
+    DEBUG_OUTPUT("For each bn start %d\n", __LINE__);
 	set_decl_section_name(t, FIXED_TEXT_SECTION_NAME);
 	insert_wrapper_function(get_name(t), t, stmt, i, replace);
+    DEBUG_OUTPUT("For each bn start %d\n", __LINE__);
 	
 //	const char * current_function_name = DECL_NAME_POINTER(t);
 //	list_t * entry = get_wrapper_function(current_function_name);
@@ -652,6 +664,7 @@ static void do_execute() {
 
     FOR_EACH_BB_FN(bb, cfun)
     {
+        DEBUG_OUTPUT("For each bn start %d\n", __LINE__);
         for (gsi = gsi_start_bb(bb); !gsi_end_p(gsi); gsi_next(&gsi)) {
 
             gimple stmt = gsi_stmt(gsi);
@@ -665,7 +678,7 @@ static void do_execute() {
                 for (i = 0; i < gimple_call_num_args(stmt); i++) {
                     tree call_arg = gimple_call_arg(stmt, i);
                     //DEBUG_OUTPUT("CALL ARG : %s\n", );
-//		    fprintf(stderr,"CALL ARG : %s\n", "");
+//		    fprintf(stderr, "CALL ARG : %s\n", "");
 //		    debug_tree(call_arg);
 
                     // Replace call args that are string constants with variable in .fixed.rodata section instead
@@ -680,25 +693,28 @@ static void do_execute() {
 		    }
 		    else if (TREE_CODE(TREE_TYPE(call_arg)) == POINTER_TYPE) {
 				if (TREE_CODE(call_arg) == INTEGER_CST) {	
-//					fprintf(stderr,"INTEGER VAR : %s\n", "");
+//					fprintf(stderr, "INTEGER VAR : %s\n", "");
 //					debug_tree(call_arg);
 				}
 				else if (TREE_CODE(TREE_TYPE(TREE_TYPE(call_arg))) == FUNCTION_TYPE) {
 					tree decl = TREE_OPERAND(call_arg, 0);
 					DEBUG_OUTPUT("NEED TO WRAP %s\n", "");
-//					fprintf(stderr,"WRAP POINTER VAR : %s\n", "");
+//					fprintf(stderr, "WRAP POINTER VAR : %s\n", "");
 //					debug_tree(call_arg);
 					if (DECL_EXTERNAL(decl)) {
 						DEBUG_OUTPUT("nvm its external %s\n", "");
 					}
 					else {
+                        DEBUG_OUTPUT("For each bn start %d\n", __LINE__);
 						if (is_node_decl_in_module(decl)) {
+                            DEBUG_OUTPUT("For each bn start %d\n", __LINE__);
 							mark_function_for_wrap(decl, stmt, i, NULL_TREE);
 						}
 					}
+                        DEBUG_OUTPUT("For each bn start %d\n", __LINE__);
 				}
 				else if (TREE_CODE(TREE_TYPE(TREE_TYPE(call_arg))) == RECORD_TYPE) {
-//					fprintf(stderr,"WRAP VAR : %s\n", "");
+//					fprintf(stderr, "WRAP VAR : %s\n", "");
 //					wrap_var(call_arg); 
 				}
 					
@@ -711,6 +727,7 @@ static void do_execute() {
            // }
    	 }
     }
+        DEBUG_OUTPUT("For each bn start %d\n", __LINE__);
     }
 
     
@@ -723,7 +740,6 @@ static void get_location(tree fndecl)
                         : UNKNOWN_LOCATION;
 
     expanded_location xloc1 = expand_location (loc_t1);
-    fprintf(stderr, "Location of %s: %s\n", get_name(fndecl), xloc1.file);
 }
 
 /* Determine whether to run execute function for given function decl. Only analyze function decls for current module. */
@@ -734,6 +750,7 @@ static bool rerandomization_wrapper_instrument_gate(void)
 
 /* Main function */
 static unsigned int rerandomization_wrapper_instrument_execute(void) {
+    DEBUG_OUTPUT("%s %d\n", __func__, __LINE__);
     do_execute();
     return 0;
 }
@@ -887,6 +904,7 @@ __visible int
 plugin_init(struct plugin_name_args *plugin_info,
             struct plugin_gcc_version *version) {
 
+
     const char *const plugin_name = plugin_info->base_name;
 
     PASS_INFO(rerandomization_wrapper_instrument, "ssa", 1, PASS_POS_INSERT_AFTER);
@@ -902,6 +920,7 @@ plugin_init(struct plugin_name_args *plugin_info,
     register_callback(plugin_name, PLUGIN_INFO, NULL,
                       &rerandomization_wrapper_plugin_info);
 
+    // 有问题
     register_callback(plugin_name, PLUGIN_PASS_MANAGER_SETUP, NULL,
                       &rerandomization_wrapper_instrument_pass_info);
     

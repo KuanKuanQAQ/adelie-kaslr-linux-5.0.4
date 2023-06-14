@@ -4046,6 +4046,7 @@ void empty_func(void) {
 }
 struct Rerandom_Driver rerandom_driver = {
 	.name       = default_name,
+	.running = false,
 	.init_entry = &empty_func,
 	.check_entry  = &empty_func,
 };
@@ -4057,11 +4058,12 @@ void init_rerandom_driver(char *name, void(*test_func)(char *)) {
 EXPORT_SYMBOL_GPL(init_rerandom_driver);
 
 void register_rerandom_driver(struct Rerandom_Driver* driver) {
+	rerandom_driver.running = true;
 	rerandom_driver.name = driver->name;
 	rerandom_driver.init_entry = driver->init_entry;
 	rerandom_driver.check_entry = driver->check_entry;
 }
-EXPORT_SYMBOL_GPL(register_rerandom_driver);
+EXPORT_SYMBOL(register_rerandom_driver);
 
 static int my_kthread(void *p)
 {
@@ -4069,6 +4071,9 @@ static int my_kthread(void *p)
 	printk("My kthread: kthread started.");
 	for ( ; ; ) {
 		msleep(5000);
+		if (rerandom_driver.running == false){
+			continue;
+		}
 		/* Periodically print the statistics */
 		if (time < ktime_get_seconds()) {
 			time = ktime_get_seconds() + 5;
@@ -4078,6 +4083,7 @@ static int my_kthread(void *p)
 			printk("** start init_entry %lx check_entry %lx rerandom_driver %lx **", 
 				rerandom_driver.init_entry, rerandom_driver.check_entry, &rerandom_driver);
 			rerandom_driver.init_entry();
+			msleep(30000);
 			printk("** start check_entry %lx **", rerandom_driver.check_entry);
 			rerandom_driver.check_entry();
 			//rerandom_driver.test_func(rerandom_driver.name);
@@ -4096,7 +4102,7 @@ int kswapd_run(int nid)
 	pg_data_t *pgdat = NODE_DATA(nid);
 	int ret = 0;
 
-	printk("Run kswapd_run nid %d", nid);
+	printk("****** Run kswapd_run nid %d", nid);
 	kthread_run(my_kthread, pgdat, "my_kthread%d", nid);
 
 	//if (pgdat->kswapd)
@@ -4112,6 +4118,7 @@ int kswapd_run(int nid)
 	//}
 	return ret;
 }
+EXPORT_SYMBOL(kswapd_run);
 
 /*
  * Called by memory hotplug when all memory in a node is offlined.  Caller must

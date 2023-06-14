@@ -784,6 +784,7 @@ struct pci_driver {
 
 struct Rerandom_Driver {
 	const char		   *name;
+	bool running;
 	void (*test_func)(char *);
 	void (*init_entry)(void);
 	void (*check_entry)(void);

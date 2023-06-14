@@ -139,6 +139,7 @@ opt_pass *_MAKE_PASS_NAME_PASS(void)
 #else
 struct opt_pass *_MAKE_PASS_NAME_PASS(void)
 {
+	DEBUG_OUTPUT("%s", __func__);
 	return &_PASS_NAME_PASS.pass;
 }
 #endif
