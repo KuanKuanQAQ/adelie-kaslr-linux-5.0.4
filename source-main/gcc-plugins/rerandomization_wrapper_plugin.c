@@ -27,7 +27,7 @@ static int generated_str_counter = 0;
 
 #define OUTPUT(filename, str, args...) \
     if(PRINT_DEBUG) { \
-    	FILE *out_file = fopen(debug_filename(filename), "a");   \
+    	FILE *out_file = fopen(debug_filename(filename), "w");   \
     	fprintf(out_file, str, args);  \
 		fclose(out_file); \
     } \
@@ -789,6 +789,10 @@ void MOD_OFFER_STACK_CALL(FILE * file) {
 }
 
 void function_prologue(FILE *file) {
+    const char *current_function_name = DECL_NAME_POINTER(current_function_decl);
+
+    DEBUG_OUTPUT("<function_prologue> Analyzing function is: %s. \n", current_function_name);
+
 	if (lookup_key(real_function_hash_table, DECL_NAME_POINTER(current_function_decl))) {
 	//if (wrapper_function_exists()) {
 	//if (strstr(DECL_NAME_POINTER(current_function_decl), "real")) {
@@ -868,7 +872,7 @@ void function_prologue(FILE *file) {
 
 /* Add gcc target hooks for asm generation */
 static void rerandomization_wrapper_plugin_start_unit(void *gcc_data, void *user_data) {
-	//targetm.asm_out.final_postscan_insn = final_postscan_insn;
+	// targetm.asm_out.final_postscan_insn = final_postscan_insn;
 	
 	targetm.asm_out.function_prologue = function_prologue;
 	struct cgraph_node * node;

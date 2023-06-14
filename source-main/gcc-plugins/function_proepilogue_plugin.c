@@ -5,9 +5,20 @@
 #include "cgraph.h"
 
 // Debugging
+#define DEBUG_DIR "/home/cat/tmp/"
+#define debug_filename(a) DEBUG_DIR a
 #define PRINT_DEBUG 1
-#define DEBUG_OUTPUT(str, args...) \
-    if(PRINT_DEBUG) {fprintf(stderr, str, args);} \
+// #define DEBUG_OUTPUT(str, args...) \
+//     if(PRINT_DEBUG) {fprintf(stderr, str, args);} \
+
+#define OUTPUT(filename, str, args...) \
+    if(PRINT_DEBUG) { \
+    	FILE *out_file = fopen(debug_filename(filename), "w");   \
+    	fprintf(out_file, str, args);  \
+		fclose(out_file); \
+    }
+	
+#define DEBUG_OUTPUT(str, args...) OUTPUT("func_pro.txt", str, args)
 
 // Macros to help output asm instructions to file
 #define OUTPUT_INSN(str, file) fputs("\t", file); fputs(str, file); fputs(";\n", file)
@@ -86,7 +97,14 @@ static bool is_push_rbp_insn(rtx_insn *insn) {
 
 
 static bool is_final_pop_rbp_insn(rtx_insn *insn) {
-    if (insn->frame_related) {
+    DEBUG_OUTPUT("<in is_final_pop_rbp_insn> \n", "");
+    if (!insn) {
+        DEBUG_OUTPUT("!insn \n", "");
+    }
+
+    if (insn && insn->frame_related) {
+        DEBUG_OUTPUT("<in frame_related> \n", "");
+
         rtx body = PATTERN(insn);
 
         if (GET_CODE(body) == SET) {
@@ -104,6 +122,12 @@ static bool is_final_pop_rbp_insn(rtx_insn *insn) {
 }
 
 static bool is_leaveq_insn(rtx_insn *insn) {
+    DEBUG_OUTPUT("<in is_leaveq_insn> \n", "");
+
+    if (!insn) {
+        DEBUG_OUTPUT("!insn \n", "");
+        return false;
+    }
     rtx body = PATTERN(insn);
 
     if (GET_CODE(body) == PARALLEL) {
@@ -117,9 +141,15 @@ static bool is_leaveq_insn(rtx_insn *insn) {
 }
 
 void function_prologue(FILE *file) {
+    const char *current_function_name = DECL_NAME_POINTER(current_function_decl);
+
+    DEBUG_OUTPUT("<function_prologue> Analyzing function is: %s. \n", current_function_name);
+    
     ps->num_functions++;
 
     if (is_static()) {
+        DEBUG_OUTPUT("<is static> \n", "");
+
         ps->num_static_functions++;
 
         if (!is_push_rbp_insn(next_real_insn(entry_of_function()))) {
@@ -131,6 +161,8 @@ void function_prologue(FILE *file) {
         }
     }
     else {
+        DEBUG_OUTPUT("<is nonstatic> \n", "");
+
         ps->num_nonstatic_functions++;
 
         OUTPUT_R11_PROEPILOGUE(file);
@@ -191,7 +223,18 @@ void final_postscan_insn_static(rtx_insn *insn, FILE *file) {
 /* Called after each instruction that is output.
  * Look for push/pop %rbp and overwrite. */
 void final_postscan_insn(FILE *file, rtx_insn *insn, rtx *opvec, int noperands) {
-    is_static() ? final_postscan_insn_static(insn, file) : final_postscan_insn_nonstatic(insn, file);
+    const char *current_function_name = DECL_NAME_POINTER(current_function_decl);
+
+    DEBUG_OUTPUT("      <final_postscan_insn> Analyzing function is: %s\n", current_function_name);
+    
+    if (is_static()) {
+        DEBUG_OUTPUT("<is static> \n", "");
+        final_postscan_insn_static(insn, file);
+    } else {
+        DEBUG_OUTPUT("<is nonstatic> \n", "");
+        final_postscan_insn_nonstatic(insn, file);
+    }
+    // is_static() ? final_postscan_insn_static(insn, file) : final_postscan_insn_nonstatic(insn, file);
 }
 
 

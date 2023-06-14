@@ -4,9 +4,20 @@
 #include "c-tree.h"
 #include "cgraph.h"
 
+#define DEBUG_DIR "/home/cat/tmp/"
+#define debug_filename(a) DEBUG_DIR a
 #define PRINT_DEBUG 1
-#define DEBUG_OUTPUT(str, args...) \
-    if(PRINT_DEBUG) {fprintf(stderr, str, args);} \
+// #define DEBUG_OUTPUT(str, args...) \
+//     if(PRINT_DEBUG) {fprintf(stderr, str, args);}
+
+#define OUTPUT(filename, str, args...) \
+    if(PRINT_DEBUG) { \
+    	FILE *out_file = fopen(debug_filename(filename), "w");   \
+    	fprintf(out_file, str, args);  \
+		fclose(out_file); \
+    } \
+	
+#define DEBUG_OUTPUT(str, args...) OUTPUT("fix_rel.txt", str, args)
 
 /* All plugins must export this symbol so that they can be linked with
    GCC license-wise.  */
